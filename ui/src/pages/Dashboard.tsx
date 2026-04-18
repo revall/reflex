@@ -56,8 +56,20 @@ const SEV_BORDER: Record<string, string> = {
 
 const SEV_LABEL: Record<string, string> = {
   critical: "text-[var(--error)] font-bold tracking-tight",
-  warning:  "text-[var(--amber-caution)]",
+  warning:  "text-[var(--amber-caution)] font-semibold",
   info:     "text-[var(--outline)]",
+};
+
+const SEV_DOT: Record<string, string> = {
+  critical: "bg-[var(--error)]",
+  warning:  "bg-[var(--amber-caution)]",
+  info:     "bg-[var(--outline)]",
+};
+
+const SEV_URGENCY: Record<string, string> = {
+  critical: "TOP URGENCY",
+  warning:  "ELEVATED",
+  info:     "INFORMATIONAL",
 };
 
 function fmt(iso: string) {
@@ -96,18 +108,29 @@ function isReal(entry: AnySignalEntry): entry is FeedEntry & { kind: "signal" } 
 
 function HeroCard({ entry }: { entry: AnySignalEntry }) {
   const e = entry.event;
+  const sev = e.severity;
+  const ts = entry.ts ? fmt(entry.ts) : null;
+
   return (
     <article className="rounded-lg premium-shadow ghost-border inner-hl overflow-hidden relative flex flex-col group transition-all duration-200 hover:shadow-lg"
       style={{ background: "var(--surface-lowest)" }}>
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--error)]" />
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${SEV_BORDER[sev] ?? "bg-[var(--outline)]"}`} />
       <div className="p-6 pl-8 flex flex-col space-y-5">
         <div className="flex justify-between items-start">
           <div className="px-2 py-0.5 rounded-sm flex items-center space-x-1"
             style={{ background: "var(--surface-low)", border: "1px solid rgba(198,197,213,0.3)" }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--error)]" />
+            <span className={`w-1.5 h-1.5 rounded-full ${SEV_DOT[sev] ?? "bg-[var(--outline)]"}`} />
             <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
           </div>
-          <span className={`font-mono text-xs ${SEV_LABEL.critical}`}>TOP URGENCY</span>
+          <div className="flex items-center gap-2">
+            {!isReal(entry) && (
+              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded"
+                style={{ background: "var(--surface-container)", color: "var(--outline)" }}>MOCK</span>
+            )}
+            <span className={`font-mono text-xs ${SEV_LABEL[sev] ?? ""}`}>
+              {SEV_URGENCY[sev] ?? sev.toUpperCase()}
+            </span>
+          </div>
         </div>
 
         <h3 className="font-headline text-xl font-bold leading-tight pr-12" style={{ color: "var(--on-surface)" }}>
@@ -115,12 +138,10 @@ function HeroCard({ entry }: { entry: AnySignalEntry }) {
         </h3>
 
         <div className="flex flex-col space-y-3">
-          <div className="flex items-center space-x-4">
-            <ConfidenceTriad />
-          </div>
+          <ConfidenceTriad />
           <p className="font-body text-sm italic border-l-2 pl-3"
             style={{ color: "var(--secondary)", borderColor: "rgba(198,197,213,0.3)" }}>
-            {e.fromAgent} → {e.toAgent} · {fmt(entry.ts)}
+            {e.fromAgent}{ts ? ` · ${ts}` : ""}
           </p>
         </div>
 
@@ -141,10 +162,6 @@ function HeroCard({ entry }: { entry: AnySignalEntry }) {
             style={{ color: "var(--error)" }}>
             Escalate to board chair
           </button>
-          {!isReal(entry) && (
-            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded ml-auto"
-              style={{ background: "var(--surface-container)", color: "var(--outline)" }}>MOCK</span>
-          )}
         </div>
       </div>
     </article>
@@ -154,13 +171,23 @@ function HeroCard({ entry }: { entry: AnySignalEntry }) {
 function ListCard({ entry }: { entry: AnySignalEntry }) {
   const e = entry.event;
   const sev = e.severity;
+  const ts = entry.ts ? fmt(entry.ts) : null;
+  const delegateLabel = isReal(entry) ? `Delegate to ${e.toAgent}` : "Delegate to COO";
+
   return (
     <article className="rounded-lg ghost-border inner-hl overflow-hidden relative flex flex-col transition-colors"
       style={{ background: "var(--surface-lowest)" }}>
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${SEV_BORDER[sev] ?? "bg-[var(--outline)]"}`} />
       <div className="p-5 pl-7 flex items-center justify-between">
         <div className="flex flex-col space-y-1.5 max-w-[70%]">
-          <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
+            {!isReal(entry) && (
+              <span className="font-mono text-[9px] px-1 py-0.5 rounded"
+                style={{ background: "var(--surface-container)", color: "var(--outline)" }}>MOCK</span>
+            )}
+            {ts && <span className="font-mono text-[9px]" style={{ color: "var(--outline)" }}>{ts}</span>}
+          </div>
           <h3 className="font-body text-base font-medium leading-snug" style={{ color: "var(--on-surface)" }}>
             {e.summary}
           </h3>
@@ -168,10 +195,10 @@ function ListCard({ entry }: { entry: AnySignalEntry }) {
             <span>D</span><span>·</span><span>R</span><span>·</span><span>I</span>
           </div>
         </div>
-        <button onClick={() => act("delegate", e)}
+        <button onClick={() => isReal(entry) && act("delegate", e as SignalFiredEvent)}
           className="px-3 py-1.5 font-body text-xs font-medium rounded transition-colors shrink-0"
           style={{ background: "var(--surface)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
-          Delegate to COO
+          {delegateLabel}
         </button>
       </div>
     </article>
