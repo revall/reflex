@@ -3,95 +3,131 @@ import { useEngine } from "../context/EngineContext";
 import { client } from "../api/client";
 import type { FeedEntry, SignalFiredEvent } from "../types";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── severity helpers ──────────────────────────────────────────────────────────
 
 const SEV_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
-const SEV_COLOUR: Record<string, string> = {
-  critical: "bg-red-600 text-white",
-  warning:  "bg-orange-500 text-white",
-  info:     "bg-green-700 text-white",
-};
+
 const SEV_BORDER: Record<string, string> = {
-  critical: "border-l-red-500",
-  warning:  "border-l-orange-400",
-  info:     "border-l-green-500",
+  critical: "bg-[var(--error)]",
+  warning:  "bg-[var(--amber-caution)]",
+  info:     "bg-[var(--outline)]",
+};
+
+const SEV_LABEL: Record<string, string> = {
+  critical: "text-[var(--error)] font-bold tracking-tight",
+  warning:  "text-[var(--amber-caution)]",
+  info:     "text-[var(--outline)]",
 };
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function categoryOf(nodeId: string) {
+  return nodeId.replace(/_/g, " ").toUpperCase();
+}
+
+async function act(action: string, e: SignalFiredEvent) {
+  await client.postSignal(e.toAgent, { action, ref: e.summary }, "dashboard").catch(console.error);
+}
+
 // ── sub-components ────────────────────────────────────────────────────────────
 
-function StatsBar({ nodes }: { nodes: ReturnType<typeof useEngine>["nodes"] }) {
-  const all = [...nodes.values()];
-  const processing = all.filter(n => n.state === "processing").length;
-  const total = all.reduce((s, n) => s + n.processedCount, 0);
-  const errors = all.filter(n => n.state === "error").length;
-
+function ConfidenceTriad() {
   return (
-    <div className="flex items-center gap-6 text-xs text-slate-500 font-mono">
-      <span>nodes <span className="text-slate-300 font-semibold">{all.length}</span></span>
-      <span>·</span>
-      <span>active <span className="text-blue-400 font-semibold">{processing}</span></span>
-      <span>·</span>
-      <span>processed <span className="text-slate-300 font-semibold">{total}</span></span>
-      {errors > 0 && <><span>·</span><span>errors <span className="text-red-400 font-semibold">{errors}</span></span></>}
+    <div className="flex space-x-1 font-mono text-[10px]" style={{ color: "var(--secondary)" }}>
+      {[["D", "↑", "var(--primary)"], ["R", "↕", "var(--primary)"], ["I", "↓", "var(--error)"]].map(([l, arrow, col]) => (
+        <span key={l}
+          className="px-1.5 py-0.5 rounded-sm flex items-center gap-0.5"
+          style={{ background: "var(--surface-container)", border: "1px solid rgba(198,197,213,0.2)" }}>
+          {l} <span style={{ color: col }}>{arrow}</span>
+        </span>
+      ))}
     </div>
   );
 }
 
-function FeedItem({ entry, onAction }: { entry: FeedEntry & { kind: "signal" }; onAction: (label: string, e: SignalFiredEvent) => void }) {
+function HeroCard({ entry }: { entry: FeedEntry & { kind: "signal" } }) {
   const e = entry.event;
-  const traceIds = e.trace.map(t => t.agentId);
-
   return (
-    <div className={`border-l-4 ${SEV_BORDER[e.severity] ?? "border-l-slate-600"} bg-slate-900 rounded-r p-4 space-y-2`}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${SEV_COLOUR[e.severity] ?? "bg-slate-700 text-slate-300"}`}>
-            {e.severity}
-          </span>
-          <span className="text-slate-500 text-xs font-mono">{e.fromAgent} → {e.toAgent}</span>
+    <article className="rounded-lg premium-shadow ghost-border inner-hl overflow-hidden relative flex flex-col group transition-all duration-200 hover:shadow-lg"
+      style={{ background: "var(--surface-lowest)" }}>
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--error)]" />
+      <div className="p-6 pl-8 flex flex-col space-y-5">
+        <div className="flex justify-between items-start">
+          <div className="px-2 py-0.5 rounded-sm flex items-center space-x-1"
+            style={{ background: "var(--surface-low)", border: "1px solid rgba(198,197,213,0.3)" }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--error)]" />
+            <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
+          </div>
+          <span className={`font-mono text-xs ${SEV_LABEL.critical}`}>TOP URGENCY</span>
         </div>
-        <span className="text-slate-600 text-[10px] font-mono shrink-0">{fmt(entry.ts)}</span>
-      </div>
 
-      <p className="text-slate-100 text-sm font-medium">"{e.summary}"</p>
+        <h3 className="font-headline text-xl font-bold leading-tight pr-12" style={{ color: "var(--on-surface)" }}>
+          "{e.summary}"
+        </h3>
 
-      {traceIds.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap">
-          {traceIds.map((id, i) => (
-            <span key={i} className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px] font-mono">{id}</span>
-          ))}
+        <div className="flex flex-col space-y-3">
+          <div className="flex items-center space-x-4">
+            <ConfidenceTriad />
+          </div>
+          <p className="font-body text-sm italic border-l-2 pl-3"
+            style={{ color: "var(--secondary)", borderColor: "rgba(198,197,213,0.3)" }}>
+            {e.fromAgent} → {e.toAgent} · {fmt(entry.ts)}
+          </p>
         </div>
-      )}
 
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={() => onAction("acknowledge", e)}
-          className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-semibold"
-        >
-          Acknowledge
-        </button>
-        <button
-          onClick={() => onAction("escalate", e)}
-          className="px-3 py-1 border border-slate-600 hover:border-slate-500 text-slate-400 hover:text-slate-300 rounded text-xs"
-        >
-          Escalate
-        </button>
-        <button
-          onClick={() => onAction("suppress", e)}
-          className="px-3 py-1 text-slate-600 hover:text-slate-400 rounded text-xs"
-        >
-          Suppress
-        </button>
+        <div className="pt-4 mt-2 border-t flex items-center space-x-3"
+          style={{ borderColor: "rgba(198,197,213,0.2)" }}>
+          <button onClick={() => act("self-act", e)}
+            className="px-4 py-2 font-body text-sm font-medium rounded inner-hl transition-all active:scale-95"
+            style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-container))", color: "var(--on-primary)", boxShadow: "0 2px 8px -2px rgba(68,80,183,0.4)" }}>
+            Self-act
+          </button>
+          <button onClick={() => act("delegate", e)}
+            className="px-4 py-2 font-body text-sm font-medium rounded transition-colors active:scale-95"
+            style={{ background: "var(--surface-lowest)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
+            Delegate to…
+          </button>
+          <button onClick={() => act("escalate", e)}
+            className="px-4 py-2 font-mono text-xs rounded transition-colors ml-auto"
+            style={{ color: "var(--error)" }}>
+            Escalate to board chair
+          </button>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
 
-// ── page ─────────────────────────────────────────────────────────────────────
+function ListCard({ entry }: { entry: FeedEntry & { kind: "signal" } }) {
+  const e = entry.event;
+  const sev = e.severity;
+  return (
+    <article className="rounded-lg ghost-border inner-hl overflow-hidden relative flex flex-col transition-colors"
+      style={{ background: "var(--surface-lowest)" }}>
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${SEV_BORDER[sev] ?? "bg-[var(--outline)]"}`} />
+      <div className="p-5 pl-7 flex items-center justify-between">
+        <div className="flex flex-col space-y-1.5 max-w-[70%]">
+          <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
+          <h3 className="font-body text-base font-medium leading-snug" style={{ color: "var(--on-surface)" }}>
+            {e.summary}
+          </h3>
+          <div className="flex space-x-1 font-mono text-[9px] opacity-60" style={{ color: "var(--secondary)" }}>
+            <span>D</span><span>·</span><span>R</span><span>·</span><span>I</span>
+          </div>
+        </div>
+        <button onClick={() => act("delegate", e)}
+          className="px-3 py-1.5 font-body text-xs font-medium rounded transition-colors shrink-0"
+          style={{ background: "var(--surface)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
+          Delegate to COO
+        </button>
+      </div>
+    </article>
+  );
+}
+
+// ── page ──────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { nodes, feed } = useEngine();
@@ -100,104 +136,157 @@ export default function Dashboard() {
     .filter((e): e is FeedEntry & { kind: "signal" } => e.kind === "signal")
     .sort((a, b) => (SEV_ORDER[a.event.severity] ?? 9) - (SEV_ORDER[b.event.severity] ?? 9));
 
-  const runs = feed
-    .filter((e): e is FeedEntry & { kind: "run" } => e.kind === "run" && e.event.status !== "running")
-    .slice(0, 6);
+  const [hero, ...rest] = signals;
 
-  const handleAction = async (action: string, e: SignalFiredEvent) => {
-    const payload = { action, originalSignal: { from: e.fromAgent, summary: e.summary } };
-    // Inject acknowledgement/escalation into the destination node
-    await client.postSignal(e.toAgent, payload, "dashboard").catch(console.error);
-  };
+  const disposed = feed
+    .filter((e): e is FeedEntry & { kind: "run" } => e.kind === "run" && e.event.status !== "running")
+    .slice(0, 5);
+
+  const watchNodes = [...nodes.values()].filter(n => n.severity).slice(0, 4);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-mono text-sm">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <span className="text-slate-200 font-semibold uppercase tracking-widest text-xs">Spinal Cord</span>
-          <span className="text-slate-700 text-xs">reflex</span>
+    <div className="min-h-screen flex flex-col items-center font-body" style={{ background: "var(--surface)", color: "var(--on-surface)" }}>
+
+      {/* Top nav */}
+      <header className="w-full h-16 glass-panel border-b flex justify-between items-center px-6 sticky top-0 z-50 inner-hl"
+        style={{ borderColor: "rgba(198,197,213,0.2)", boxShadow: "0 1px 0 rgba(99,102,241,0.05)" }}>
+        <div className="flex items-center space-x-2">
+          <span className="font-mono font-bold text-sm tracking-widest" style={{ color: "var(--on-surface)" }}>CEO REFLEX</span>
+          <span className="px-2 py-0.5 rounded-full font-mono text-[10px]"
+            style={{ background: "var(--surface-low)", color: "var(--outline)", border: "1px solid rgba(198,197,213,0.3)" }}>V3.4</span>
         </div>
-        <StatsBar nodes={nodes} />
-        <div className="flex items-center gap-4">
-          <span className="text-slate-600 text-xs">
-            LAST UPDATED: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} UTC
-          </span>
-          <Link to="/" className="text-slate-500 hover:text-slate-300 text-xs">← Tree</Link>
+
+        {/* Calibration strip */}
+        <div className="flex flex-col items-center w-80 opacity-80 hover:opacity-100 transition-opacity">
+          <div className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>
+            calibration · Data 89 · Relev 72 · Interp 51{" "}
+            <span className="font-bold" style={{ color: "var(--primary)" }}>↗ +18pp</span>
+          </div>
+          <div className="font-mono text-[8px] tracking-tighter sparkline mt-0.5 w-full text-center select-none overflow-hidden whitespace-nowrap">
+            ▃▅▇█▆▅▃▂▃▅▇█▆▅▃▂▃▅▇█▆▅▃▂▃▅▇█▆▅▃▂▃▅▇█
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <span className="material-symbols-outlined ms text-[20px]" style={{ color: "var(--outline)" }}>settings</span>
+          <div className="h-5 w-px" style={{ background: "rgba(198,197,213,0.4)" }} />
+          <Link to="/" className="font-body text-sm transition-colors" style={{ color: "var(--secondary)" }}>
+            ← Tree
+          </Link>
         </div>
       </header>
 
-      {/* Body */}
-      <div className="flex gap-6 p-6 max-w-6xl mx-auto">
-
-        {/* Ranked feed */}
-        <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 uppercase tracking-widest text-xs font-semibold">Ranked Feed</span>
-            <span className="text-slate-600 text-xs">{signals.length} signal{signals.length !== 1 ? "s" : ""}</span>
-          </div>
-
-          {signals.length === 0 ? (
-            <div className="bg-slate-900 rounded p-8 text-center text-slate-600">
-              No signals yet — submit a run to start.
+      {/* Mission / Vision / Values ribbon */}
+      <div className="w-full border-b py-3 px-8" style={{ background: "var(--bg-cream)", borderColor: "rgba(198,197,213,0.2)" }}>
+        <div className="w-full max-w-[1440px] mx-auto grid grid-cols-3 gap-6 items-start divide-x" style={{ borderColor: "#E6E8EC" }}>
+          {[
+            ["Mission", "Reasonably priced, quality food served quickly in clean, attractive surroundings."],
+            ["Vision",  "The world's most profitable QSR through a strong franchise system and dedicated employees."],
+            ["Values",  "Teamwork · Excellence · Respect · 'Have it Your Way'"],
+          ].map(([label, text], i) => (
+            <div key={label} className={`flex flex-col space-y-1 ${i === 0 ? "pr-6" : i === 1 ? "px-6" : "pl-6"}`}>
+              <h4 className="font-mono text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--red-brand)" }}>{label}</h4>
+              <p className="font-body text-xs leading-snug" style={{ color: "var(--on-surface-variant)" }}>{text}</p>
             </div>
-          ) : (
-            signals.map((entry, i) => (
-              <FeedItem key={i} entry={entry} onAction={handleAction} />
-            ))
-          )}
+          ))}
         </div>
-
-        {/* Right sidebar */}
-        <div className="w-64 shrink-0 space-y-6">
-
-          {/* Node status */}
-          <div>
-            <span className="text-slate-400 uppercase tracking-widest text-xs font-semibold">Nodes</span>
-            <div className="mt-2 space-y-1">
-              {[...nodes.values()].map(n => (
-                <div key={n.id} className="flex items-center justify-between py-1.5 border-b border-slate-800">
-                  <span className="text-slate-300 text-xs truncate">{n.id}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                    n.state === "processing" ? "bg-blue-900 text-blue-300" :
-                    n.state === "error"      ? "bg-red-900 text-red-300" :
-                    n.state === "silent"     ? "bg-yellow-900 text-yellow-300" :
-                    n.severity === "critical" ? "bg-red-900 text-red-300" :
-                    n.severity === "warning"  ? "bg-orange-900 text-orange-300" :
-                    n.severity === "info"     ? "bg-green-900 text-green-300" :
-                    "bg-slate-800 text-slate-500"
-                  }`}>
-                    {n.severity ?? n.state}
-                  </span>
-                </div>
-              ))}
-              {nodes.size === 0 && <p className="text-slate-600 text-xs">No nodes</p>}
-            </div>
-          </div>
-
-          {/* Recently disposed */}
-          <div>
-            <span className="text-slate-400 uppercase tracking-widest text-xs font-semibold">Recently Disposed</span>
-            <div className="mt-2 space-y-1">
-              {runs.length === 0
-                ? <p className="text-slate-600 text-xs">No completed runs</p>
-                : runs.map((entry, i) => (
-                  <div key={i} className="flex items-center justify-between py-1.5 border-b border-slate-800">
-                    <span className="text-slate-500 text-xs line-through truncate">{entry.event.runId}</span>
-                    <span className={`text-[10px] shrink-0 ml-2 ${
-                      entry.event.status === "complete" ? "text-green-500" :
-                      entry.event.status === "silent"   ? "text-yellow-500" :
-                      "text-red-500"
-                    }`}>
-                      {entry.event.status === "complete" ? "✓" : entry.event.status === "silent" ? "–" : "✗"}
-                    </span>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
+        <div className="w-full flex justify-center space-x-3 mt-3">
+          {["Quality & Value", "Speed", "Environment"].map(tag => (
+            <span key={tag} className="px-2 py-0.5 rounded-full font-body text-[10px]"
+              style={{ border: "1px solid rgba(138,143,153,0.4)", color: "#8A8F99" }}>{tag}</span>
+          ))}
         </div>
       </div>
+
+      {/* Main */}
+      <main className="w-full max-w-[1440px] px-8 py-8 flex flex-col space-y-6">
+
+        {/* Pre-feed bar */}
+        <div className="w-full flex justify-between items-end border-b pb-4" style={{ borderColor: "rgba(198,197,213,0.2)" }}>
+          <div className="flex items-center space-x-2 font-body text-sm" style={{ color: "var(--secondary)" }}>
+            <span className="ms text-[16px]" style={{ color: "var(--outline)" }}>history</span>
+            <span>{nodes.size} nodes · {signals.length} signal{signals.length !== 1 ? "s" : ""} in feed
+              {signals.filter(s => s.event.severity === "critical").length > 0 && (
+                <span style={{ color: "var(--error)", fontWeight: 500 }}>
+                  {" "}· {signals.filter(s => s.event.severity === "critical").length} above threshold
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: "var(--outline)" }}>
+            Last updated: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} UTC
+          </div>
+        </div>
+
+        {/* Two-column grid */}
+        <div className="grid grid-cols-1 md:grid-cols-[65fr_35fr] gap-8 items-start">
+
+          {/* Left: Ranked feed */}
+          <section className="flex flex-col space-y-4 w-full">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "var(--on-surface)" }}>Ranked Feed</h2>
+              <span className="font-body text-xs" style={{ color: "var(--secondary)" }}>
+                {signals.length} signal{signals.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {!hero && (
+              <div className="rounded-lg p-10 text-center font-body text-sm"
+                style={{ background: "var(--surface-container)", color: "var(--outline)" }}>
+                No signals yet — submit a run to start.
+              </div>
+            )}
+
+            {hero && <HeroCard entry={hero} />}
+            {rest.map((entry, i) => <ListCard key={i} entry={entry} />)}
+          </section>
+
+          {/* Right: Widgets */}
+          <aside className="flex flex-col space-y-6 w-full">
+
+            {/* Watch-list */}
+            <div className="rounded-lg ghost-border inner-hl p-5 flex flex-col space-y-4"
+              style={{ background: "var(--surface-lowest)" }}>
+              <h4 className="font-mono text-[10px] font-bold tracking-widest uppercase border-b pb-2"
+                style={{ color: "var(--on-surface)", borderColor: "rgba(198,197,213,0.2)" }}>Watch-List</h4>
+              <ul className="flex flex-col space-y-1">
+                {watchNodes.length === 0 ? (
+                  <li className="font-body text-sm py-2" style={{ color: "var(--outline)" }}>No active signals to watch</li>
+                ) : watchNodes.map(n => (
+                  <li key={n.id}
+                    className="flex items-center justify-between py-2 px-2 rounded-md cursor-pointer group transition-colors"
+                    style={{ color: "var(--secondary)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-low)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    <span className="font-body text-sm truncate pr-4">{n.id}</span>
+                    <span className="ms text-[14px]" style={{ color: "var(--outline)" }}>arrow_forward</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Recently disposed */}
+            <div className="rounded-lg ghost-border inner-hl p-5 flex flex-col space-y-4 opacity-80"
+              style={{ background: "var(--surface-lowest)" }}>
+              <h4 className="font-mono text-[10px] font-bold tracking-widest uppercase border-b pb-2"
+                style={{ color: "var(--on-surface)", borderColor: "rgba(198,197,213,0.2)" }}>Recently Disposed</h4>
+              <ul className="flex flex-col space-y-1">
+                {disposed.length === 0 ? (
+                  <li className="font-body text-sm py-2" style={{ color: "var(--outline)" }}>No completed runs yet</li>
+                ) : disposed.map((entry, i) => (
+                  <li key={i} className="flex items-center justify-between py-2 px-2">
+                    <span className="font-body text-sm truncate pr-4 line-through" style={{ color: "var(--outline)" }}>
+                      {entry.event.runId}
+                    </span>
+                    <span className="ms text-[14px]" style={{ color: "var(--outline)" }}>check</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+          </aside>
+        </div>
+      </main>
     </div>
   );
 }

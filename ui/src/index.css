@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+:root {
+  --surface:               #f8f9fb;
+  --surface-low:           #f2f4f6;
+  --surface-container:     #edeef0;
+  --surface-high:          #e7e8ea;
+  --surface-highest:       #e1e2e4;
+  --surface-lowest:        #ffffff;
+  --on-surface:            #191c1e;
+  --on-surface-variant:    #454652;
+  --outline:               #767684;
+  --outline-variant:       #c6c5d5;
+  --primary:               #4450b7;
+  --primary-container:     #5e6ad2;
+  --on-primary:            #ffffff;
+  --secondary:             #595f66;
+  --error:                 #ba1a1a;
+  --error-container:       #ffdad6;
+  --amber-caution:         #f5a524;
+  --bg-cream:              #FAF6EE;
+  --red-brand:             #8B1A1F;
+}
+
+.font-headline { font-family: 'Plus Jakarta Sans', sans-serif; }
+.font-body     { font-family: 'Inter', sans-serif; }
+.font-mono     { font-family: 'JetBrains Mono', monospace; }
+
+.ms { font-family: 'Material Symbols Outlined'; font-size: 18px;
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+.glass-panel   { background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); }
+.ghost-border  { border: 1px solid rgba(198,197,213,0.4); }
+.premium-shadow{ box-shadow: 0 4px 24px -8px rgba(25,28,30,0.08); }
+.inner-hl      { box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.5); }
+.sparkline     { background: linear-gradient(90deg,#c6c5d5 0%,#4450b7 100%);
+                 -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
