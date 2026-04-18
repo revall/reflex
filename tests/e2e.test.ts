@@ -11,10 +11,12 @@ import { createApp } from "../src/api/server.js";
 import type { RunRecord, NodeStatus } from "../src/types.js";
 import type { Server } from "node:http";
 
-// ── tree: root ← [leaf_a, leaf_b] ───────────────────────────────────────────
+// ── shared responses ─────────────────────────────────────────────────────────
 
 const FIRE = '{"action":"fire","severity":"warning","summary":"anomaly detected","payload":{"score":0.9}}';
 const SILENT = '{"action":"silent"}';
+
+// ── 2-level tree: root ← [leaf_a, leaf_b] ───────────────────────────────────
 
 function makeServer(leafResponse: string, rootResponse = FIRE): { url: string; server: Server } {
   const nodeStore = new NodeStore();
@@ -36,7 +38,45 @@ function makeServer(leafResponse: string, rootResponse = FIRE): { url: string; s
   engine.start();
 
   const app = createApp(engine, nodeStore, runStore);
-  // Port 0 lets the OS pick a free port
+  const server = serve({ fetch: app.fetch, port: 0 }) as Server;
+  const { port } = server.address() as { port: number };
+  return { url: `http://localhost:${port}`, server };
+}
+
+// ── 3-level tree: root ← middle ← leaf ──────────────────────────────────────
+//
+// leaf fires with summary "leaf fired"
+// middle fires with summary "middle fired"
+// root fires with summary "root fired"
+// This lets us assert exact trace order and per-hop summaries.
+
+function makeDeepServer(): { url: string; server: Server } {
+  const nodeStore = new NodeStore();
+  const runStore = new RunStore();
+
+  const responses: Record<string, string> = {
+    leaf:   '{"action":"fire","severity":"info","summary":"leaf fired","payload":{"raw":true}}',
+    middle: '{"action":"fire","severity":"warning","summary":"middle fired","payload":{"enriched":true}}',
+    root:   '{"action":"fire","severity":"critical","summary":"root fired","payload":{"escalated":true}}',
+  };
+
+  const modelFactory = async (modelId: string) =>
+    new FakeListChatModel({ responses: [responses[modelId] ?? SILENT, responses[modelId] ?? SILENT] });
+
+  const config = {
+    version: 1 as const,
+    root: "root",
+    agents: [
+      { id: "root",   prompt: "escalate",  model: "root",   tools: [], children: ["middle"] },
+      { id: "middle", prompt: "enrich",    model: "middle", tools: [], children: ["leaf"]   },
+      { id: "leaf",   prompt: "detect",    model: "leaf",   tools: [], children: []         },
+    ],
+  };
+
+  const engine = new Engine(config, modelFactory, nodeStore, runStore, "./workspace", false);
+  engine.start();
+
+  const app = createApp(engine, nodeStore, runStore);
   const server = serve({ fetch: app.fetch, port: 0 }) as Server;
   const { port } = server.address() as { port: number };
   return { url: `http://localhost:${port}`, server };
@@ -159,6 +199,115 @@ describe("E2E — full tree via HTTP", () => {
   it("GET /runs/:runId returns 404 for unknown id", async () => {
     const res = await fetch(`${url}/runs/run_does_not_exist`);
     expect(res.status).toBe(404);
+  });
+});
+
+// ── signal propagation through a 3-level tree ────────────────────────────────
+//
+// Tree: leaf → middle → root
+//
+// Asserts that each hop appends its own TraceEntry so the root's lastSignal
+// carries the full history: [leaf, middle, root] in that exact order.
+
+describe("E2E — signal propagation leaf → middle → root", () => {
+  let url: string;
+  let server: Server;
+
+  beforeAll(() => {
+    ({ url, server } = makeDeepServer());
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  it("run completes and root fires as critical", async () => {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { sensor: "temp", value: 120 }, source: "iot" }),
+    });
+    const { runId } = await res.json() as { runId: string };
+    const run = await pollRun(url, runId);
+
+    expect(run.status).toBe("complete");
+    expect(run.rootOutput).toEqual({ escalated: true });
+  });
+
+  it("root lastSignal trace contains one entry per node in bottom-up order", async () => {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { sensor: "pressure", value: 5 }, source: "iot" }),
+    });
+    const { runId } = await res.json() as { runId: string };
+    await pollRun(url, runId);
+
+    const nodeRes = await fetch(`${url}/nodes/root`);
+    const root = await nodeRes.json() as NodeStatus;
+    const trace = root.lastSignal?.trace as Array<{ agentId: string; summary: string; firedAt: string }>;
+
+    // Exact length: leaf, middle, root — one entry per hop
+    expect(trace).toHaveLength(3);
+    expect(trace[0].agentId).toBe("leaf");
+    expect(trace[1].agentId).toBe("middle");
+    expect(trace[2].agentId).toBe("root");
+  });
+
+  it("each trace entry carries the correct summary for that hop", async () => {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { sensor: "voltage", value: 240 }, source: "iot" }),
+    });
+    const { runId } = await res.json() as { runId: string };
+    await pollRun(url, runId);
+
+    const nodeRes = await fetch(`${url}/nodes/root`);
+    const root = await nodeRes.json() as NodeStatus;
+    const trace = root.lastSignal?.trace as Array<{ agentId: string; summary: string }>;
+
+    expect(trace[0].summary).toBe("leaf fired");
+    expect(trace[1].summary).toBe("middle fired");
+    expect(trace[2].summary).toBe("root fired");
+  });
+
+  it("middle node received leaf signal and its lastSignal trace has leaf entry", async () => {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { sensor: "humidity", value: 95 }, source: "iot" }),
+    });
+    const { runId } = await res.json() as { runId: string };
+    await pollRun(url, runId);
+
+    const middleRes = await fetch(`${url}/nodes/middle`);
+    const middle = await middleRes.json() as NodeStatus;
+    const trace = middle.lastSignal?.trace as Array<{ agentId: string }>;
+
+    // Middle's outgoing signal has [leaf, middle] — it hasn't seen root yet
+    expect(trace).toHaveLength(2);
+    expect(trace[0].agentId).toBe("leaf");
+    expect(trace[1].agentId).toBe("middle");
+  });
+
+  it("firedAt timestamps are in ascending order along the trace", async () => {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { final: true }, source: "iot" }),
+    });
+    const { runId } = await res.json() as { runId: string };
+    await pollRun(url, runId);
+
+    const nodeRes = await fetch(`${url}/nodes/root`);
+    const root = await nodeRes.json() as NodeStatus;
+    const trace = root.lastSignal?.trace as Array<{ firedAt: string }>;
+
+    const times = trace.map((t) => new Date(t.firedAt).getTime());
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
+    }
   });
 });
 
