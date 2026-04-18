@@ -48,14 +48,14 @@ function NodeCard({ data }: NodeProps<AgentNode>) {
 
       {/* Trace */}
       {trace.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-white/10 space-y-1">
+        <div className="mt-2 pt-2 border-t border-white/10 space-y-0.5 text-[10px]">
           {trace.map((t, i) => (
-            <div key={i} className="flex items-baseline gap-1.5 font-mono">
+            <div key={i} className="flex items-baseline gap-1 font-mono">
               <span className={`shrink-0 ${SEV_TEXT[status.lastSignal?.severity ?? ""] ?? "text-slate-500"}`}>
                 {i === trace.length - 1 ? "▶" : "·"}
               </span>
-              <span className="text-slate-300 font-semibold shrink-0">{t.agentId}</span>
-              <span className="text-slate-500 truncate">{t.summary}</span>
+              <span className="text-slate-400 font-semibold shrink-0">{t.agentId}</span>
+              <span className="text-slate-600 truncate">{t.summary}</span>
             </div>
           ))}
         </div>
