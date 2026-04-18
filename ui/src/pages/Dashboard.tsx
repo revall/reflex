@@ -213,6 +213,7 @@ export default function Dashboard() {
       <header className="w-full h-16 glass-panel border-b flex justify-between items-center px-6 sticky top-0 z-50 inner-hl"
         style={{ borderColor: "rgba(198,197,213,0.2)", boxShadow: "0 1px 0 rgba(99,102,241,0.05)" }}>
         <div className="flex items-center space-x-2">
+          <img src="/bk-logo.png" alt="Burger King" className="w-8 h-8 rounded-full object-cover" />
           <span className="font-mono font-bold text-sm tracking-widest" style={{ color: "var(--on-surface)" }}>CEO REFLEX</span>
           <span className="px-2 py-0.5 rounded-full font-mono text-[10px]"
             style={{ background: "var(--surface-low)", color: "var(--outline)", border: "1px solid rgba(198,197,213,0.3)" }}>V3.4</span>
