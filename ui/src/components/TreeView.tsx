@@ -1,56 +1,60 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
+import dagre from "@dagrejs/dagre";
 import { client } from "../api/client";
 import NodeCard, { type AgentNode } from "./NodeCard";
 import type { NodeStatus, TreeConfig } from "../types";
 
 const nodeTypes = { agent: NodeCard } as const;
 
+const NODE_W = 240;
+const NODE_H_BASE = 72;
+const TRACE_ROW_H = 20;
+
+function nodeHeight(status: NodeStatus): number {
+  const traceLen = status.lastSignal?.trace.length ?? 0;
+  return NODE_H_BASE + (traceLen > 0 ? 8 + traceLen * TRACE_ROW_H : 0);
+}
+
 function buildLayout(config: TreeConfig, nodes: Map<string, NodeStatus>, selectedId: string | null) {
-  const XGAP = 180;
-  const YGAP = 120;
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  // TB = top-to-bottom; root at top, leaves at bottom (signal flows up)
+  g.setGraph({ rankdir: "BT", nodesep: 40, ranksep: 60 });
 
-  // Assign depth (root = 0, children deeper)
-  const depth = new Map<string, number>();
-  const assign = (id: string, d: number) => {
-    depth.set(id, d);
-    const agent = config.agents.find((a) => a.id === id);
-    agent?.children.forEach((c) => assign(c, d + 1));
-  };
-  assign(config.root, 0);
-
-  // Group by depth
-  const byDepth = new Map<number, string[]>();
-  for (const [id, d] of depth) {
-    if (!byDepth.has(d)) byDepth.set(d, []);
-    byDepth.get(d)!.push(id);
+  for (const agent of config.agents) {
+    const status = nodes.get(agent.id) ?? { id: agent.id, state: "idle" as const, severity: null, processedCount: 0, lastSignal: null, lastSignalAt: null, errorMessage: null };
+    g.setNode(agent.id, { width: NODE_W, height: nodeHeight(status) });
   }
 
-  const rfNodes: AgentNode[] = [];
-  for (const [d, ids] of byDepth) {
-    ids.forEach((id, i) => {
-      const status = nodes.get(id) ?? { id, state: "idle" as const, severity: null, processedCount: 0, lastSignal: null, lastSignalAt: null, errorMessage: null };
-      rfNodes.push({
-        id,
-        type: "agent",
-        position: { x: i * XGAP - ((ids.length - 1) * XGAP) / 2, y: d * YGAP },
-        data: { status, selected: id === selectedId },
-      });
-    });
-  }
-
-  const rfEdges: Edge[] = [];
   for (const agent of config.agents) {
     for (const child of agent.children) {
-      rfEdges.push({
-        id: `${child}->${agent.id}`,
-        source: child,
-        target: agent.id,
-        style: { stroke: "#475569" },
-        animated: nodes.get(child)?.state === "processing",
-      });
+      g.setEdge(child, agent.id);
     }
   }
+
+  dagre.layout(g);
+
+  const rfNodes: AgentNode[] = config.agents.map((agent) => {
+    const { x, y } = g.node(agent.id);
+    const status = nodes.get(agent.id) ?? { id: agent.id, state: "idle" as const, severity: null, processedCount: 0, lastSignal: null, lastSignalAt: null, errorMessage: null };
+    return {
+      id: agent.id,
+      type: "agent",
+      position: { x: x - NODE_W / 2, y: y - nodeHeight(status) / 2 },
+      data: { status, selected: agent.id === selectedId },
+    };
+  });
+
+  const rfEdges: Edge[] = config.agents.flatMap((agent) =>
+    agent.children.map((child) => ({
+      id: `${child}->${agent.id}`,
+      source: child,
+      target: agent.id,
+      style: { stroke: "#475569" },
+      animated: nodes.get(child)?.state === "processing",
+    }))
+  );
 
   return { rfNodes, rfEdges };
 }
