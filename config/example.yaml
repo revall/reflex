@@ -1,0 +1,28 @@
+version: 1
+root: root_agent
+
+agents:
+  - id: root_agent
+    prompt: |
+      You receive synthesized signals from agent_a and agent_b.
+      Determine if combined signals represent a significant issue.
+      If yes, fire a concise alert. If no, stay silent.
+    model: claude-sonnet-4-6
+    tools: [context]
+    children: [agent_a, agent_b]
+
+  - id: agent_a
+    prompt: |
+      You receive raw events. Extract type-A data and emit a structured signal
+      if the event is relevant. Focus on data quality and anomalies.
+    model: claude-sonnet-4-6
+    tools: [file, context]
+    children: []
+
+  - id: agent_b
+    prompt: |
+      You receive raw events. Call external APIs to enrich the event data
+      and emit a structured signal if the enriched data is significant.
+    model: claude-sonnet-4-6
+    tools: [http, context]
+    children: []

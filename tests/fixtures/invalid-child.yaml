@@ -1,0 +1,8 @@
+version: 1
+root: root_agent
+agents:
+  - id: root_agent
+    prompt: "test"
+    model: claude-sonnet-4-6
+    tools: []
+    children: [ghost_agent]
