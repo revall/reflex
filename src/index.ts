@@ -26,10 +26,10 @@ engine.start();
 
 const app = createApp(engine, nodeStore, runStore);
 
-const server = serve({ fetch: app.fetch, port }, () => {
-  process.stdout.write(`Neuron Agent Engine running on http://localhost:${port}\n`);
+const server = serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
+  process.stdout.write(`Neuron Agent Engine running on http://0.0.0.0:${port}\n`);
   process.stdout.write(`  Config: ${configPath} (${config.agents.length} agents)\n`);
-  process.stdout.write(`  Swagger UI: http://localhost:${port}/doc\n`);
+  process.stdout.write(`  Swagger UI: http://0.0.0.0:${port}/doc\n`);
 });
 
 function shutdown() {
