@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useEngine } from "../context/EngineContext";
 import { client } from "../api/client";
@@ -106,7 +107,41 @@ function isReal(entry: AnySignalEntry): entry is FeedEntry & { kind: "signal" } 
   return entry.kind === "signal";
 }
 
-function HeroCard({ entry }: { entry: AnySignalEntry }) {
+function CardActions({ entry, onDismiss }: { entry: AnySignalEntry; onDismiss: () => void }) {
+  const e = entry.event;
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => isReal(entry) && act("prioritize", e as SignalFiredEvent)}
+        className="px-3 py-1.5 font-body text-sm font-medium rounded inner-hl transition-all active:scale-95"
+        style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-container))", color: "var(--on-primary)", boxShadow: "0 2px 8px -2px rgba(68,80,183,0.3)" }}>
+        Prioritize
+      </button>
+      <button
+        onClick={() => isReal(entry) && act("assign", e as SignalFiredEvent)}
+        className="px-3 py-1.5 font-body text-sm font-medium rounded transition-colors active:scale-95"
+        style={{ background: "var(--surface-lowest)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
+        Assign
+      </button>
+      <button
+        onClick={() => isReal(entry) && act("snooze", e as SignalFiredEvent)}
+        className="px-3 py-1.5 font-body text-sm font-medium rounded transition-colors active:scale-95"
+        style={{ background: "var(--surface-lowest)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
+        Snooze
+      </button>
+      <button
+        onClick={onDismiss}
+        className="ml-auto p-1.5 rounded transition-colors hover:bg-surface-container"
+        title="Dismiss"
+        style={{ color: "var(--outline)" }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+      </button>
+    </div>
+  );
+}
+
+function HeroCard({ entry, onDismiss }: { entry: AnySignalEntry; onDismiss: () => void }) {
   const e = entry.event;
   const sev = e.severity;
   const ts = entry.ts ? fmt(entry.ts) : null;
@@ -133,7 +168,7 @@ function HeroCard({ entry }: { entry: AnySignalEntry }) {
           </div>
         </div>
 
-        <h3 className="font-headline text-xl font-bold leading-tight pr-12" style={{ color: "var(--on-surface)" }}>
+        <h3 className="font-headline text-xl font-bold leading-tight" style={{ color: "var(--on-surface)" }}>
           "{e.summary}"
         </h3>
 
@@ -145,61 +180,40 @@ function HeroCard({ entry }: { entry: AnySignalEntry }) {
           </p>
         </div>
 
-        <div className="pt-4 mt-2 border-t flex items-center space-x-3"
-          style={{ borderColor: "rgba(198,197,213,0.2)" }}>
-          <button onClick={() => isReal(entry) && act("self-act", e as SignalFiredEvent)}
-            className="px-4 py-2 font-body text-sm font-medium rounded inner-hl transition-all active:scale-95"
-            style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-container))", color: "var(--on-primary)", boxShadow: "0 2px 8px -2px rgba(68,80,183,0.4)" }}>
-            Self-act
-          </button>
-          <button onClick={() => isReal(entry) && act("delegate", e as SignalFiredEvent)}
-            className="px-4 py-2 font-body text-sm font-medium rounded transition-colors active:scale-95"
-            style={{ background: "var(--surface-lowest)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
-            Delegate to…
-          </button>
-          <button onClick={() => isReal(entry) && act("escalate", e as SignalFiredEvent)}
-            className="px-4 py-2 font-mono text-xs rounded transition-colors ml-auto"
-            style={{ color: "var(--error)" }}>
-            Escalate to board chair
-          </button>
+        <div className="pt-4 mt-2 border-t" style={{ borderColor: "rgba(198,197,213,0.2)" }}>
+          <CardActions entry={entry} onDismiss={onDismiss} />
         </div>
       </div>
     </article>
   );
 }
 
-function ListCard({ entry }: { entry: AnySignalEntry }) {
+function ListCard({ entry, onDismiss }: { entry: AnySignalEntry; onDismiss: () => void }) {
   const e = entry.event;
   const sev = e.severity;
   const ts = entry.ts ? fmt(entry.ts) : null;
-  const delegateLabel = isReal(entry) ? `Delegate to ${e.toAgent}` : "Delegate to COO";
 
   return (
     <article className="rounded-lg ghost-border inner-hl overflow-hidden relative flex flex-col transition-colors"
       style={{ background: "var(--surface-lowest)" }}>
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${SEV_BORDER[sev] ?? "bg-[var(--outline)]"}`} />
-      <div className="p-5 pl-7 flex items-center justify-between">
-        <div className="flex flex-col space-y-1.5 max-w-[70%]">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
-            {!isReal(entry) && (
-              <span className="font-mono text-[9px] px-1 py-0.5 rounded"
-                style={{ background: "var(--surface-container)", color: "var(--outline)" }}>MOCK</span>
-            )}
-            {ts && <span className="font-mono text-[9px]" style={{ color: "var(--outline)" }}>{ts}</span>}
-          </div>
-          <h3 className="font-body text-base font-medium leading-snug" style={{ color: "var(--on-surface)" }}>
-            {e.summary}
-          </h3>
-          <div className="flex space-x-1 font-mono text-[9px] opacity-60" style={{ color: "var(--secondary)" }}>
-            <span>D</span><span>·</span><span>R</span><span>·</span><span>I</span>
+      <div className="p-5 pl-7 flex flex-col space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col space-y-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px]" style={{ color: "var(--secondary)" }}>{categoryOf(e.fromAgent)}</span>
+              {!isReal(entry) && (
+                <span className="font-mono text-[9px] px-1 py-0.5 rounded"
+                  style={{ background: "var(--surface-container)", color: "var(--outline)" }}>MOCK</span>
+              )}
+              {ts && <span className="font-mono text-[9px]" style={{ color: "var(--outline)" }}>{ts}</span>}
+            </div>
+            <h3 className="font-body text-base font-medium leading-snug" style={{ color: "var(--on-surface)" }}>
+              {e.summary}
+            </h3>
           </div>
         </div>
-        <button onClick={() => isReal(entry) && act("delegate", e as SignalFiredEvent)}
-          className="px-3 py-1.5 font-body text-xs font-medium rounded transition-colors shrink-0"
-          style={{ background: "var(--surface)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
-          {delegateLabel}
-        </button>
+        <CardActions entry={entry} onDismiss={onDismiss} />
       </div>
     </article>
   );
@@ -209,6 +223,8 @@ function ListCard({ entry }: { entry: AnySignalEntry }) {
 
 export default function Dashboard() {
   const { nodes, feed } = useEngine();
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+  const dismiss = (i: number) => setDismissed(prev => new Set([...prev, i]));
 
   const realSignals = feed
     .filter((e): e is FeedEntry & { kind: "signal" } =>
@@ -216,8 +232,9 @@ export default function Dashboard() {
     )
     .sort((a, b) => (SEV_ORDER[a.event.severity] ?? 9) - (SEV_ORDER[b.event.severity] ?? 9));
 
-  // Real signals first, then mocks to fill the feed
-  const allSignals: AnySignalEntry[] = [...realSignals, ...MOCK_FEED];
+  // Real signals first, then mocks; filter dismissed by index
+  const allSignals: AnySignalEntry[] = [...realSignals, ...MOCK_FEED]
+    .filter((_, i) => !dismissed.has(i));
   const [hero, ...rest] = allSignals;
 
   const WATCHLIST = [
@@ -335,8 +352,8 @@ export default function Dashboard() {
               </div>
             )}
 
-            {hero && <HeroCard entry={hero} />}
-            {rest.map((entry, i) => <ListCard key={i} entry={entry} />)}
+            {hero && <HeroCard entry={hero} onDismiss={() => dismiss(0)} />}
+            {rest.map((entry, i) => <ListCard key={i} entry={entry} onDismiss={() => dismiss(i + 1)} />)}
           </section>
 
           {/* Right: Widgets */}
