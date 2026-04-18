@@ -120,7 +120,7 @@ describe("Engine integration", () => {
     expect(runStore.get(runId)?.status).toBe("silent");
   });
 
-  it("trace log is written for completed run", async () => {
+  it("trace log contains correct agentId and fired fields", async () => {
     const fireResponse = '{"action":"fire","severity":"warning","summary":"found issue","payload":{}}';
     const { engine, runStore } = makeEngine(fireResponse);
 
@@ -135,7 +135,73 @@ describe("Engine integration", () => {
 
     const logPath = path.join("./logs", `trace-${runId}.jsonl`);
     expect(fs.existsSync(logPath)).toBe(true);
-    const lines = fs.readFileSync(logPath, "utf8").trim().split("\n");
-    expect(lines.length).toBeGreaterThanOrEqual(1);
+
+    const entries = fs.readFileSync(logPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+
+    // Every entry must have agentId, fired, input, output, timestamp
+    for (const entry of entries) {
+      expect(entry).toHaveProperty("agentId");
+      expect(entry).toHaveProperty("fired");
+      expect(entry).toHaveProperty("input");
+      expect(entry).toHaveProperty("timestamp");
+    }
+
+    // All agents that fired should have output signal
+    const fired = entries.filter((e) => e.fired);
+    for (const entry of fired) {
+      expect(entry.output).not.toBeNull();
+      expect(entry.output.fromAgent).toBe(entry.agentId);
+    }
+
+    const agentIds = entries.map((e) => e.agentId);
+    expect(agentIds).toContain("leaf_a");
+    expect(agentIds).toContain("leaf_b");
+  });
+
+  it("node error is recorded in NodeStore and run completes", async () => {
+    const nodeStore = new NodeStore();
+    const runStore = new RunStore();
+    const modelFactory = async () => {
+      throw new Error("LLM unavailable");
+    };
+
+    const engine = new Engine(threeAgentConfig, modelFactory, nodeStore, runStore, "./workspace");
+    engine.start();
+
+    const runId = engine.submitRun({
+      id: "evt_5",
+      source: "system",
+      payload: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await waitForRun(runStore, runId);
+
+    // Both leaves errored; run should reach terminal state
+    expect(runStore.get(runId)?.status).not.toBe("running");
+    expect(nodeStore.get("leaf_a").state).toBe("error");
+    expect(nodeStore.get("leaf_b").state).toBe("error");
+  });
+
+  it("submitToNode injects directly into a specific node", async () => {
+    const fireResponse = '{"action":"fire","severity":"info","summary":"direct inject","payload":{}}';
+    const { engine, runStore, nodeStore } = makeEngine(fireResponse);
+
+    const { queueDepth } = engine.submitToNode("leaf_a", { direct: true }, "test", []);
+    expect(typeof queueDepth).toBe("number");
+
+    // Wait for leaf_a to process
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (nodeStore.get("leaf_a").processedCount > 0) return resolve();
+        setTimeout(check, 50);
+      };
+      check();
+    });
+
+    expect(nodeStore.get("leaf_a").processedCount).toBeGreaterThan(0);
   });
 });
