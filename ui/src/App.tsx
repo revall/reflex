@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import TreeView from "./components/TreeView";
@@ -24,6 +25,7 @@ export default function App() {
           Spinal Cord
         </span>
         <span className="text-slate-700 text-xs">reflex</span>
+        <Link to="/dashboard" className="text-slate-500 hover:text-slate-300 text-xs ml-2">Dashboard →</Link>
         {loading && <span className="text-slate-500 text-xs">connecting…</span>}
       </header>
 
