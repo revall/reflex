@@ -98,18 +98,6 @@ export default function NodePanel({ nodeStatus: n, outcomes, onClose }: Props) {
           <pre className="mt-2 bg-slate-900 rounded p-2 overflow-x-auto text-slate-300 max-h-32">
             {JSON.stringify(sig.payload, null, 2)}
           </pre>
-          {sig.trace.length > 0 && (
-            <div className="mt-2 space-y-1">
-              <span className="text-slate-500 uppercase tracking-wide">Trace</span>
-              {sig.trace.map((t, i) => (
-                <div key={i} className="flex gap-2 text-slate-400">
-                  <span className="text-slate-600">{new Date(t.firedAt).toLocaleTimeString()}</span>
-                  <span className="text-slate-300 font-semibold">{t.agentId}</span>
-                  <span className="truncate">{t.summary}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       ) : (
         <p className="text-slate-600">No signal yet</p>
