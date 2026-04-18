@@ -76,3 +76,8 @@ export interface RunUpdateEvent {
 export type FeedEntry =
   | { kind: "signal"; ts: string; event: SignalFiredEvent }
   | { kind: "run";    ts: string; event: RunUpdateEvent };
+
+export type NodeOutcome =
+  | { kind: "fire";   ts: string; severity: AlertSeverity; summary: string; toAgent: string; payload: unknown; trace: TraceEntry[] }
+  | { kind: "silent"; ts: string }
+  | { kind: "error";  ts: string; message: string | null };

@@ -1,6 +1,12 @@
-import type { NodeStatus } from "../types";
+import type { NodeOutcome, NodeStatus } from "../types";
 import ContextView from "./ContextView";
 import InjectForm from "./InjectForm";
+
+const SEVERITY_COLOUR: Record<string, string> = {
+  critical: "text-red-400",
+  warning:  "text-orange-400",
+  info:     "text-green-400",
+};
 
 const SEVERITY_BADGE: Record<string, string> = {
   critical: "bg-red-900 text-red-300 border border-red-700",
@@ -17,10 +23,11 @@ const STATE_BADGE: Record<string, string> = {
 
 interface Props {
   nodeStatus: NodeStatus;
+  outcomes: NodeOutcome[];
   onClose: () => void;
 }
 
-export default function NodePanel({ nodeStatus: n, onClose }: Props) {
+export default function NodePanel({ nodeStatus: n, outcomes, onClose }: Props) {
   const sig = n.lastSignal;
 
   return (
@@ -46,21 +53,51 @@ export default function NodePanel({ nodeStatus: n, onClose }: Props) {
 
       <hr className="border-slate-800" />
 
-      {/* Last signal */}
+      {/* Outcome history */}
+      <div>
+        <span className="text-slate-400 uppercase tracking-wide">Outcomes</span>
+        {outcomes.length === 0
+          ? <p className="text-slate-600 mt-1">No outcomes yet</p>
+          : (
+            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+              {[...outcomes].reverse().map((o, i) => (
+                <div key={i} className="flex items-start gap-2 font-mono">
+                  <span className="text-slate-600 shrink-0">{new Date(o.ts).toLocaleTimeString()}</span>
+                  {o.kind === "fire" && (
+                    <>
+                      <span className={`shrink-0 ${SEVERITY_COLOUR[o.severity] ?? ""}`}>✓ fire</span>
+                      <span className={`shrink-0 ${SEVERITY_COLOUR[o.severity] ?? ""}`}>{o.severity}</span>
+                      <span className="text-slate-300 truncate">"{o.summary}"</span>
+                      <span className="text-slate-600 shrink-0">→ {o.toAgent}</span>
+                    </>
+                  )}
+                  {o.kind === "silent" && (
+                    <span className="text-yellow-600">✗ silent</span>
+                  )}
+                  {o.kind === "error" && (
+                    <span className="text-red-400">! error{o.message ? ` — ${o.message}` : ""}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </div>
+
+      <hr className="border-slate-800" />
+
+      {/* Last signal detail */}
       {sig ? (
         <div>
           <span className="text-slate-400 uppercase tracking-wide">Last Signal</span>
           <p className="mt-1 text-slate-300">
-            <span className="text-slate-500">{sig.fromAgent}</span>
-            {" → "}
+            <span className="text-slate-500">{sig.fromAgent}</span>{" → "}
             <span className="text-slate-500">{sig.toAgent}</span>
           </p>
           <p className="text-slate-500">{new Date(sig.timestamp).toLocaleTimeString()}</p>
-
           <pre className="mt-2 bg-slate-900 rounded p-2 overflow-x-auto text-slate-300 max-h-32">
             {JSON.stringify(sig.payload, null, 2)}
           </pre>
-
           {sig.trace.length > 0 && (
             <div className="mt-2 space-y-1">
               <span className="text-slate-500 uppercase tracking-wide">Trace</span>

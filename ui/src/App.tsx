@@ -7,11 +7,13 @@ import SignalFeed from "./components/SignalFeed";
 import RunModal from "./components/RunModal";
 import { useNodes } from "./hooks/useNodes";
 import { useSignalFeed } from "./hooks/useSignalFeed";
+import { useNodeHistory } from "./hooks/useNodeHistory";
 
 export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { nodes, loading } = useNodes();
   const { feed } = useSignalFeed();
+  const { history } = useNodeHistory();
 
   const selectedNode = selectedNodeId ? (nodes.get(selectedNodeId) ?? null) : null;
 
@@ -37,7 +39,11 @@ export default function App() {
 
         {selectedNode && (
           <div className="w-96 border-l border-slate-800 overflow-y-auto shrink-0">
-            <NodePanel nodeStatus={selectedNode} onClose={() => setSelectedNodeId(null)} />
+            <NodePanel
+              nodeStatus={selectedNode}
+              outcomes={history.get(selectedNode.id) ?? []}
+              onClose={() => setSelectedNodeId(null)}
+            />
           </div>
         )}
       </div>
