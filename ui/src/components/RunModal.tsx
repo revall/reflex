@@ -34,10 +34,10 @@ export default function RunModal() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Trigger button — rendered inline wherever RunModal is placed */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-44 right-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm font-semibold shadow-lg z-10"
+        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold transition-colors"
       >
         ▶ Run
       </button>

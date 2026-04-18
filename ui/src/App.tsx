@@ -6,6 +6,7 @@ import TreeView from "./components/TreeView";
 import NodePanel from "./components/NodePanel";
 import SignalFeed from "./components/SignalFeed";
 import RunModal from "./components/RunModal";
+import EmailSubmit from "./components/EmailSubmit";
 import { useEngine } from "./context/EngineContext";
 
 export default function App() {
@@ -23,6 +24,9 @@ export default function App() {
         <span className="text-slate-700 text-xs">reflex</span>
         <Link to="/dashboard" className="text-slate-500 hover:text-slate-300 text-xs ml-2">Dashboard →</Link>
         {loading && <span className="text-slate-500 text-xs">connecting…</span>}
+        <div className="ml-auto">
+          <RunModal />
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -47,11 +51,11 @@ export default function App() {
         )}
       </div>
 
-      <div className="h-40 border-t border-slate-800 shrink-0">
+      <EmailSubmit />
+
+      <div className="h-32 border-t border-slate-800 shrink-0">
         <SignalFeed feed={feed} />
       </div>
-
-      <RunModal />
     </div>
   );
 }
