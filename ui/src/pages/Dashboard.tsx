@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { useNodes } from "../hooks/useNodes";
-import { useSignalFeed } from "../hooks/useSignalFeed";
+import { useEngine } from "../context/EngineContext";
 import { client } from "../api/client";
 import type { FeedEntry, SignalFiredEvent } from "../types";
 
@@ -24,7 +23,7 @@ function fmt(iso: string) {
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-function StatsBar({ nodes }: { nodes: ReturnType<typeof useNodes>["nodes"] }) {
+function StatsBar({ nodes }: { nodes: ReturnType<typeof useEngine>["nodes"] }) {
   const all = [...nodes.values()];
   const processing = all.filter(n => n.state === "processing").length;
   const total = all.reduce((s, n) => s + n.processedCount, 0);
@@ -95,8 +94,7 @@ function FeedItem({ entry, onAction }: { entry: FeedEntry & { kind: "signal" }; 
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { nodes } = useNodes();
-  const { feed } = useSignalFeed();
+  const { nodes, feed } = useEngine();
 
   const signals = feed
     .filter((e): e is FeedEntry & { kind: "signal" } => e.kind === "signal")

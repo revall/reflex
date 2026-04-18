@@ -6,15 +6,11 @@ import TreeView from "./components/TreeView";
 import NodePanel from "./components/NodePanel";
 import SignalFeed from "./components/SignalFeed";
 import RunModal from "./components/RunModal";
-import { useNodes } from "./hooks/useNodes";
-import { useSignalFeed } from "./hooks/useSignalFeed";
-import { useNodeHistory } from "./hooks/useNodeHistory";
+import { useEngine } from "./context/EngineContext";
 
 export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const { nodes, loading } = useNodes();
-  const { feed } = useSignalFeed();
-  const { history } = useNodeHistory();
+  const { nodes, loading, feed, history } = useEngine();
 
   const selectedNode = selectedNodeId ? (nodes.get(selectedNodeId) ?? null) : null;
 
