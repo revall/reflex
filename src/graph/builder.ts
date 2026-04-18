@@ -115,13 +115,9 @@ export class Engine {
     const queue = this.queues.get(nodeId);
     if (!queue) return;
     queue.push(item);
-    // Increment pending count here — before any processing begins — so the
-    // counter is always non-zero while a signal is in-flight.
-    const current = this.runPending.get(item.runId) ?? 0;
-    this.runPending.set(item.runId, current + 1);
-
-    const prev = this.tail.get(nodeId) ?? Promise.resolve();
-    const next = prev.then(() => this.drainOne(nodeId));
+    // Increment before any processing so counter is non-zero while in-flight.
+    this.runPending.set(item.runId, (this.runPending.get(item.runId) ?? 0) + 1);
+    const next = (this.tail.get(nodeId) ?? Promise.resolve()).then(() => this.drainOne(nodeId));
     this.tail.set(nodeId, next);
   }
 
@@ -134,14 +130,13 @@ export class Engine {
 
   private decrement(runId: string): void {
     const pending = (this.runPending.get(runId) ?? 0) - 1;
-    if (pending <= 0) {
-      this.runPending.delete(runId);
-      const run = this.runStore.get(runId);
-      if (run?.status === "running") {
-        this.runStore.setSilent(runId);
-      }
-    } else {
+    if (pending > 0) {
       this.runPending.set(runId, pending);
+      return;
+    }
+    this.runPending.delete(runId);
+    if (this.runStore.get(runId)?.status === "running") {
+      this.runStore.setSilent(runId);
     }
   }
 
@@ -150,7 +145,9 @@ export class Engine {
     const agentCfg = this.agentMap.get(nodeId)!;
     this.nodeStore.setProcessing(nodeId);
 
-    const source = "source" in signal ? (signal as RawEvent).source : (signal as Signal).fromAgent;
+    const isSignal = "trace" in signal;
+    const source = isSignal ? (signal as Signal).fromAgent : (signal as RawEvent).source;
+    const incomingTrace: TraceEntry[] = isSignal ? (signal as Signal).trace : [];
     process.stdout.write(`→ [${nodeId}] received   ${source} | ${summarise(signal.payload)}\n`);
 
     try {
@@ -158,8 +155,6 @@ export class Engine {
       const nodeContext = this.nodeContexts.get(nodeId)!;
       const tools = buildTools(agentCfg.tools, { workdir: this.workdir, nodeContext });
       const decision = await processSignal(signal, agentCfg, { model, tools });
-
-      const incomingTrace: TraceEntry[] = "trace" in signal ? (signal as Signal).trace : [];
 
       if (decision.action === "fire") {
         const trace: TraceEntry[] = [
