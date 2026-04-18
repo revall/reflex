@@ -14,12 +14,12 @@ const config: TreeConfig = {
   ],
 };
 
-function makeApp(response = '{"action":"silent"}') {
+function makeApp(response = '{"action":"silent"}', debug = false) {
   const nodeStore = new NodeStore();
   const runStore = new RunStore();
   const modelFactory = async () =>
     new FakeListChatModel({ responses: [response, response] });
-  const engine = new Engine(config, modelFactory, nodeStore, runStore, "./workspace");
+  const engine = new Engine(config, modelFactory, nodeStore, runStore, "./workspace", debug);
   engine.start();
   return { app: createApp(engine, nodeStore, runStore), nodeStore, runStore, engine };
 }
@@ -124,7 +124,7 @@ describe("POST /nodes/:id/signal", () => {
   });
 
   it("preserves supplied trace in queued signal", async () => {
-    const { app, nodeStore } = makeApp('{"action":"fire","severity":"info","summary":"ok","payload":{}}');
+    const { app, nodeStore } = makeApp('{"action":"fire","severity":"info","summary":"ok","payload":{}}', false);
     const trace = [{ agentId: "upstream", summary: "upstream fired", firedAt: new Date().toISOString() }];
 
     await app.request("/nodes/leaf/signal", {

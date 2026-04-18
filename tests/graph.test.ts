@@ -34,14 +34,13 @@ const threeAgentConfig: TreeConfig = {
   ],
 };
 
-function makeEngine(defaultResponse: string) {
+function makeEngine(defaultResponse: string, debug = false) {
   const nodeStore = new NodeStore();
   const runStore = new RunStore();
-  // Each call to modelFactory creates a fresh model with the response available
   const modelFactory = async (_modelId: string) =>
     new FakeListChatModel({ responses: [defaultResponse, defaultResponse, defaultResponse] });
 
-  const engine = new Engine(threeAgentConfig, modelFactory, nodeStore, runStore, "./workspace");
+  const engine = new Engine(threeAgentConfig, modelFactory, nodeStore, runStore, "./workspace", debug);
   engine.start();
   return { engine, nodeStore, runStore };
 }
@@ -122,7 +121,7 @@ describe("Engine integration", () => {
 
   it("trace log contains correct agentId and fired fields", async () => {
     const fireResponse = '{"action":"fire","severity":"warning","summary":"found issue","payload":{}}';
-    const { engine, runStore } = makeEngine(fireResponse);
+    const { engine, runStore } = makeEngine(fireResponse, true); // debug=true to enable log
 
     const runId = engine.submitRun({
       id: "evt_4",
@@ -168,7 +167,7 @@ describe("Engine integration", () => {
       throw new Error("LLM unavailable");
     };
 
-    const engine = new Engine(threeAgentConfig, modelFactory, nodeStore, runStore, "./workspace");
+    const engine = new Engine(threeAgentConfig, modelFactory, nodeStore, runStore, "./workspace", false);
     engine.start();
 
     const runId = engine.submitRun({
@@ -184,6 +183,23 @@ describe("Engine integration", () => {
     expect(runStore.get(runId)?.status).not.toBe("running");
     expect(nodeStore.get("leaf_a").state).toBe("error");
     expect(nodeStore.get("leaf_b").state).toBe("error");
+  });
+
+  it("does not write trace log when debug is false", async () => {
+    const fireResponse = '{"action":"fire","severity":"info","summary":"ok","payload":{}}';
+    const { engine, runStore } = makeEngine(fireResponse, false); // default: no debug
+
+    const runId = engine.submitRun({
+      id: "evt_nodebug",
+      source: "system",
+      payload: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await waitForRun(runStore, runId);
+
+    const logPath = path.join("./logs", `trace-${runId}.jsonl`);
+    expect(fs.existsSync(logPath)).toBe(false);
   });
 
   it("submitToNode injects directly into a specific node", async () => {

@@ -12,6 +12,11 @@ interface QueueItem {
   runId: string;
 }
 
+function summarise(payload: unknown): string {
+  const s = JSON.stringify(payload) ?? "";
+  return s.length > 80 ? s.slice(0, 77) + "…" : s;
+}
+
 export class Engine {
   private agentMap: Map<string, AgentConfig>;
   private leafIds: string[];
@@ -28,7 +33,8 @@ export class Engine {
     private modelFactory: (modelId: string) => Promise<BaseChatModel>,
     private nodeStore: NodeStore,
     private runStore: RunStore,
-    private workdir: string
+    private workdir: string,
+    private debug = false
   ) {
     this.agentMap = new Map(config.agents.map((a) => [a.id, a]));
     this.leafIds = config.agents.filter((a) => a.children.length === 0).map((a) => a.id);
@@ -144,6 +150,9 @@ export class Engine {
     const agentCfg = this.agentMap.get(nodeId)!;
     this.nodeStore.setProcessing(nodeId);
 
+    const source = "source" in signal ? (signal as RawEvent).source : (signal as Signal).fromAgent;
+    process.stdout.write(`→ [${nodeId}] received   ${source} | ${summarise(signal.payload)}\n`);
+
     try {
       const model = await this.modelFactory(agentCfg.model);
       const nodeContext = this.nodeContexts.get(nodeId)!;
@@ -169,6 +178,7 @@ export class Engine {
           timestamp: new Date().toISOString(),
         };
 
+        process.stdout.write(`✓ [${nodeId}] fire        severity=${outSignal.severity}  "${decision.summary}"\n`);
         this.nodeStore.setFired(nodeId, outSignal);
         this.writeTraceLog(runId, nodeId, signal, outSignal, true);
 
@@ -180,19 +190,19 @@ export class Engine {
           this.decrement(runId);
         } else {
           // Root fired — mark complete and clean up pending tracking.
-          process.stdout.write(JSON.stringify(outSignal, null, 2) + "\n");
           this.runStore.setComplete(runId, outSignal.payload);
           this.runPending.delete(runId);
         }
       } else {
+        process.stdout.write(`✗ [${nodeId}] silent\n`);
         this.nodeStore.setSilent(nodeId);
         this.writeTraceLog(runId, nodeId, signal, null, false);
         this.decrement(runId);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      process.stdout.write(`! [${nodeId}] error        ${message}\n`);
       this.nodeStore.setError(nodeId, message);
-      process.stderr.write(`[${nodeId}] error: ${message}\n`);
       this.decrement(runId);
     }
   }
@@ -211,6 +221,7 @@ export class Engine {
     output: Signal | null,
     fired: boolean
   ): void {
+    if (!this.debug) return;
     try {
       fs.mkdirSync("./logs", { recursive: true });
       const entry = JSON.stringify({ agentId, fired, input, output, timestamp: new Date().toISOString() });

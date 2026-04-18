@@ -15,11 +15,12 @@ if (configIdx === -1 || !args[configIdx + 1]) {
 const configPath = args[configIdx + 1];
 const port = Number(process.env["PORT"] ?? 3000);
 const workdir = process.env["WORKDIR"] ?? "./workspace";
+const debug = args.includes("--debug") || process.env["DEBUG"] === "true";
 
 const config = loadConfig(configPath);
 const nodeStore = new NodeStore();
 const runStore = new RunStore();
-const engine = new Engine(config, createModel, nodeStore, runStore, workdir);
+const engine = new Engine(config, createModel, nodeStore, runStore, workdir, debug);
 
 engine.start();
 
