@@ -6,7 +6,7 @@ agents:
     prompt: |
       You receive synthesized signals from agent_a and agent_b.
       Determine if combined signals represent a significant issue.
-      If yes, fire a concise alert. If no, stay silent.
+      If yes, fire a concise alert. If no, stay silent. You are in food bussines
     model: claude-sonnet-4-6
     tools: [context]
     children: [agent_a, agent_b]
