@@ -1,7 +1,48 @@
 import { Link } from "react-router-dom";
 import { useEngine } from "../context/EngineContext";
 import { client } from "../api/client";
-import type { FeedEntry, SignalFiredEvent } from "../types";
+import type { FeedEntry, AlertSeverity, SignalFiredEvent } from "../types";
+
+// ── mock feed items (from design file) ───────────────────────────────────────
+
+interface MockEntry {
+  kind: "mock";
+  ts: string;
+  event: {
+    fromAgent: string;
+    toAgent:   string;
+    severity:  AlertSeverity;
+    summary:   string;
+    trace:     { agentId: string; summary: string; firedAt: string }[];
+  };
+}
+
+const MOCK_FEED: MockEntry[] = [
+  {
+    kind: "mock", ts: "",
+    event: {
+      fromAgent: "S5 GOVERNANCE", toAgent: "board", severity: "critical",
+      summary: "Allergen-labeling miss at regional bun supplier; 3 markets affected",
+      trace: [],
+    },
+  },
+  {
+    kind: "mock", ts: "",
+    event: {
+      fromAgent: "S2 OPERATIONS", toAgent: "coo", severity: "warning",
+      summary: "SSSG softening in mid-market US franchisee cohort…",
+      trace: [],
+    },
+  },
+  {
+    kind: "mock", ts: "",
+    event: {
+      fromAgent: "S4 MARKET", toAgent: "cmo", severity: "info",
+      summary: "Competitor announces national $5 value-meal extension…",
+      trace: [],
+    },
+  },
+];
 
 // ── severity helpers ──────────────────────────────────────────────────────────
 
@@ -47,7 +88,13 @@ function ConfidenceTriad() {
   );
 }
 
-function HeroCard({ entry }: { entry: FeedEntry & { kind: "signal" } }) {
+type AnySignalEntry = (FeedEntry & { kind: "signal" }) | MockEntry;
+
+function isReal(entry: AnySignalEntry): entry is FeedEntry & { kind: "signal" } {
+  return entry.kind === "signal";
+}
+
+function HeroCard({ entry }: { entry: AnySignalEntry }) {
   const e = entry.event;
   return (
     <article className="rounded-lg premium-shadow ghost-border inner-hl overflow-hidden relative flex flex-col group transition-all duration-200 hover:shadow-lg"
@@ -79,28 +126,32 @@ function HeroCard({ entry }: { entry: FeedEntry & { kind: "signal" } }) {
 
         <div className="pt-4 mt-2 border-t flex items-center space-x-3"
           style={{ borderColor: "rgba(198,197,213,0.2)" }}>
-          <button onClick={() => act("self-act", e)}
+          <button onClick={() => isReal(entry) && act("self-act", e as SignalFiredEvent)}
             className="px-4 py-2 font-body text-sm font-medium rounded inner-hl transition-all active:scale-95"
             style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-container))", color: "var(--on-primary)", boxShadow: "0 2px 8px -2px rgba(68,80,183,0.4)" }}>
             Self-act
           </button>
-          <button onClick={() => act("delegate", e)}
+          <button onClick={() => isReal(entry) && act("delegate", e as SignalFiredEvent)}
             className="px-4 py-2 font-body text-sm font-medium rounded transition-colors active:scale-95"
             style={{ background: "var(--surface-lowest)", color: "var(--on-surface)", border: "1px solid rgba(198,197,213,0.4)" }}>
             Delegate to…
           </button>
-          <button onClick={() => act("escalate", e)}
+          <button onClick={() => isReal(entry) && act("escalate", e as SignalFiredEvent)}
             className="px-4 py-2 font-mono text-xs rounded transition-colors ml-auto"
             style={{ color: "var(--error)" }}>
             Escalate to board chair
           </button>
+          {!isReal(entry) && (
+            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded ml-auto"
+              style={{ background: "var(--surface-container)", color: "var(--outline)" }}>MOCK</span>
+          )}
         </div>
       </div>
     </article>
   );
 }
 
-function ListCard({ entry }: { entry: FeedEntry & { kind: "signal" } }) {
+function ListCard({ entry }: { entry: AnySignalEntry }) {
   const e = entry.event;
   const sev = e.severity;
   return (
@@ -132,11 +183,13 @@ function ListCard({ entry }: { entry: FeedEntry & { kind: "signal" } }) {
 export default function Dashboard() {
   const { nodes, feed } = useEngine();
 
-  const signals = feed
+  const realSignals = feed
     .filter((e): e is FeedEntry & { kind: "signal" } => e.kind === "signal")
     .sort((a, b) => (SEV_ORDER[a.event.severity] ?? 9) - (SEV_ORDER[b.event.severity] ?? 9));
 
-  const [hero, ...rest] = signals;
+  // Real signals first, then mocks to fill the feed
+  const allSignals: AnySignalEntry[] = [...realSignals, ...MOCK_FEED];
+  const [hero, ...rest] = allSignals;
 
   const WATCHLIST = [
     "EMEA Q3 Margin Compression",
@@ -212,10 +265,10 @@ export default function Dashboard() {
         <div className="w-full flex justify-between items-end border-b pb-4" style={{ borderColor: "rgba(198,197,213,0.2)" }}>
           <div className="flex items-center space-x-2 font-body text-sm" style={{ color: "var(--secondary)" }}>
             <span className="ms text-[16px]" style={{ color: "var(--outline)" }}>history</span>
-            <span>{nodes.size} nodes · {signals.length} signal{signals.length !== 1 ? "s" : ""} in feed
-              {signals.filter(s => s.event.severity === "critical").length > 0 && (
+            <span>{nodes.size} nodes · {realSignals.length} live signal{realSignals.length !== 1 ? "s" : ""}
+              {realSignals.filter(s => s.event.severity === "critical").length > 0 && (
                 <span style={{ color: "var(--error)", fontWeight: 500 }}>
-                  {" "}· {signals.filter(s => s.event.severity === "critical").length} above threshold
+                  {" "}· {realSignals.filter(s => s.event.severity === "critical").length} above threshold
                 </span>
               )}
             </span>
@@ -233,7 +286,8 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-2">
               <h2 className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "var(--on-surface)" }}>Ranked Feed</h2>
               <span className="font-body text-xs" style={{ color: "var(--secondary)" }}>
-                {signals.length} signal{signals.length !== 1 ? "s" : ""}
+                {realSignals.length > 0 && <span style={{ color: "var(--primary)" }}>{realSignals.length} live · </span>}
+                {MOCK_FEED.length} mock
               </span>
             </div>
 
