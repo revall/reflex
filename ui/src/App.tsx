@@ -21,8 +21,9 @@ export default function App() {
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-mono text-sm">
       <header className="flex items-center gap-3 px-4 py-2 border-b border-slate-800 shrink-0">
         <span className="text-slate-400 font-semibold tracking-wide uppercase text-xs">
-          Neuron Agent Engine
+          Spinal Cord
         </span>
+        <span className="text-slate-700 text-xs">reflex</span>
         {loading && <span className="text-slate-500 text-xs">connecting…</span>}
       </header>
 
