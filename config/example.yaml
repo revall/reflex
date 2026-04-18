@@ -7,7 +7,7 @@ agents:
       You receive synthesized signals from agent_a and agent_b.
       Determine if combined signals represent a significant issue.
       If yes, fire a concise alert. If no, stay silent.
-    model: claude-sonnet-4-6
+    model: claude-3-5-haiku-20241022
     tools: [context]
     children: [agent_a, agent_b]
 
@@ -15,7 +15,7 @@ agents:
     prompt: |
       You receive raw events. Extract type-A data and emit a structured signal
       if the event is relevant. Focus on data quality and anomalies.
-    model: claude-sonnet-4-6
+    model: claude-3-5-haiku-20241022
     tools: [file, context]
     children: []
 
@@ -23,6 +23,6 @@ agents:
     prompt: |
       You receive raw events. Call external APIs to enrich the event data
       and emit a structured signal if the enriched data is significant.
-    model: claude-sonnet-4-6
+    model: claude-3-5-haiku-20241022
     tools: [http, context]
     children: []
