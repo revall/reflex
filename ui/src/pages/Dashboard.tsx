@@ -184,7 +184,9 @@ export default function Dashboard() {
   const { nodes, feed } = useEngine();
 
   const realSignals = feed
-    .filter((e): e is FeedEntry & { kind: "signal" } => e.kind === "signal")
+    .filter((e): e is FeedEntry & { kind: "signal" } =>
+      e.kind === "signal" && e.event.toAgent === "output"
+    )
     .sort((a, b) => (SEV_ORDER[a.event.severity] ?? 9) - (SEV_ORDER[b.event.severity] ?? 9));
 
   // Real signals first, then mocks to fill the feed
