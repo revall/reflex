@@ -5,8 +5,10 @@ import { z } from "zod";
 import type { ToolContext } from "./index.js";
 
 function resolveSafe(workdir: string, filePath: string): string {
+  const base = path.resolve(workdir) + path.sep;
   const resolved = path.resolve(workdir, filePath);
-  if (!resolved.startsWith(path.resolve(workdir))) {
+  // Append sep so "/workspace" doesn't match "/workspacefile.txt"
+  if (!resolved.startsWith(base) && resolved !== path.resolve(workdir)) {
     throw new Error(`Path traversal blocked: "${filePath}"`);
   }
   return resolved;

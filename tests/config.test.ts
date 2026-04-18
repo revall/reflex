@@ -36,4 +36,10 @@ describe("loadConfig", () => {
       loadConfig(path.join(fixturesDir, "invalid-child.yaml"))
     ).toThrow(/unknown child/);
   });
+
+  it("throws on cyclic config", () => {
+    expect(() =>
+      loadConfig(path.join(fixturesDir, "cyclic.yaml"))
+    ).toThrow(/cycle/);
+  });
 });

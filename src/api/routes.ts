@@ -161,7 +161,8 @@ export function createRoutes(engine: Engine, nodeStore: NodeStore, runStore: Run
         timestamp: new Date().toISOString(),
       };
       const runId = engine.submitRun(event);
-      return c.json({ runId, status: "running", startedAt: new Date().toISOString() }, 200);
+      const run = runStore.get(runId)!;
+      return c.json({ runId, status: "running", startedAt: run.startedAt }, 200);
     }
   );
 

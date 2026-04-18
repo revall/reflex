@@ -62,6 +62,13 @@ describe("file tools", () => {
     const [, fileWrite] = createFileTools(makeCtx());
     await expect(fileWrite.invoke({ path: "../secret.txt", content: "x" })).rejects.toThrow(/traversal/);
   });
+
+  it("file_read does not match adjacent directory with same prefix", async () => {
+    // /workspace should not allow /workspacefile.txt
+    const { createFileTools } = await import("../src/tools/file.js");
+    const [fileRead] = createFileTools(makeCtx({ workdir: "/workspace" }));
+    await expect(fileRead.invoke({ path: "../workspacefile.txt" })).rejects.toThrow(/traversal/);
+  });
 });
 
 // ── http tools ────────────────────────────────────────────────────────────────
@@ -108,6 +115,28 @@ describe("http tools", () => {
       "https://example.com",
       expect.objectContaining({ headers: { Authorization: "Bearer token" } })
     );
+  });
+
+  it.each([
+    "http://localhost/api",
+    "http://127.0.0.1/secret",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://10.0.0.1/internal",
+    "http://172.16.0.1/internal",
+    "http://192.168.1.1/router",
+    "file:///etc/passwd",
+  ])("http_get blocks SSRF URL: %s", async (url) => {
+    const { createHttpTools } = await import("../src/tools/http.js");
+    const [httpGet] = createHttpTools();
+    await expect(httpGet.invoke({ url })).rejects.toThrow(/Blocked|Invalid/);
+  });
+
+  it("http_post blocks SSRF on POST", async () => {
+    const { createHttpTools } = await import("../src/tools/http.js");
+    const [, httpPost] = createHttpTools();
+    await expect(
+      httpPost.invoke({ url: "http://169.254.169.254/", body: "" })
+    ).rejects.toThrow(/Blocked/);
   });
 });
 

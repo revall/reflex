@@ -19,7 +19,8 @@ export class Engine {
   private queues = new Map<string, QueueItem[]>();
   private tail = new Map<string, Promise<void>>();
   private nodeContexts = new Map<string, Map<string, string>>();
-  // Tracks in-flight signals per run; when hits 0 and run still running → silent
+  // Counts signals in-flight per run. Incremented at enqueue, decremented only
+  // at terminal outcomes (silent, error, root fires). Hits 0 → run is silent.
   private runPending = new Map<string, number>();
 
   constructor(
@@ -46,7 +47,6 @@ export class Engine {
 
   submitRun(event: RawEvent): string {
     const runId = this.runStore.create();
-    this.runPending.set(runId, this.leafIds.length);
     for (const leafId of this.leafIds) {
       this.enqueue(leafId, { signal: event, runId });
     }
@@ -55,24 +55,36 @@ export class Engine {
 
   submitToNode(
     nodeId: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payload: any,
+    payload: unknown,
     source: string,
     trace: TraceEntry[]
   ): { queueDepth: number } {
     const agentCfg = this.agentMap.get(nodeId);
     if (!agentCfg) throw new Error(`Unknown node: ${nodeId}`);
 
-    const signal: RawEvent = {
-      id: uuidv4(),
-      source,
-      payload,
-      timestamp: new Date().toISOString(),
-    };
+    // If caller supplies a trace, wrap as a Signal so the trace is preserved.
+    // Otherwise use a plain RawEvent.
+    const signal: RawEvent | Signal =
+      trace.length > 0
+        ? {
+            id: uuidv4(),
+            fromAgent: source,
+            toAgent: nodeId,
+            severity: "info",
+            payload,
+            trace,
+            timestamp: new Date().toISOString(),
+          }
+        : {
+            id: uuidv4(),
+            source,
+            payload,
+            timestamp: new Date().toISOString(),
+          };
 
     const runId = this.runStore.create();
-    this.runPending.set(runId, 1);
     this.enqueue(nodeId, { signal, runId });
+    // Queue length is stable here — enqueue appends synchronously before any await.
     const depth = this.queues.get(nodeId)?.length ?? 0;
     return { queueDepth: depth };
   }
@@ -97,6 +109,11 @@ export class Engine {
     const queue = this.queues.get(nodeId);
     if (!queue) return;
     queue.push(item);
+    // Increment pending count here — before any processing begins — so the
+    // counter is always non-zero while a signal is in-flight.
+    const current = this.runPending.get(item.runId) ?? 0;
+    this.runPending.set(item.runId, current + 1);
+
     const prev = this.tail.get(nodeId) ?? Promise.resolve();
     const next = prev.then(() => this.drainOne(nodeId));
     this.tail.set(nodeId, next);
@@ -111,13 +128,14 @@ export class Engine {
 
   private decrement(runId: string): void {
     const pending = (this.runPending.get(runId) ?? 0) - 1;
-    this.runPending.set(runId, pending);
     if (pending <= 0) {
+      this.runPending.delete(runId);
       const run = this.runStore.get(runId);
       if (run?.status === "running") {
         this.runStore.setSilent(runId);
       }
-      this.runPending.delete(runId);
+    } else {
+      this.runPending.set(runId, pending);
     }
   }
 
@@ -155,12 +173,13 @@ export class Engine {
         this.writeTraceLog(runId, nodeId, signal, outSignal, true);
 
         if (parentId) {
-          // Increment before decrement so pending never hits 0 prematurely
-          this.runPending.set(runId, (this.runPending.get(runId) ?? 0) + 1);
-          this.decrement(runId);
+          // Enqueue to parent first (increments pending), then decrement for
+          // this node. Order matters: prevents pending from hitting 0 between
+          // the two operations when this is the last in-flight signal.
           this.enqueue(parentId, { signal: outSignal, runId });
+          this.decrement(runId);
         } else {
-          // Root fired — run complete
+          // Root fired — mark complete and clean up pending tracking.
           process.stdout.write(JSON.stringify(outSignal, null, 2) + "\n");
           this.runStore.setComplete(runId, outSignal.payload);
           this.runPending.delete(runId);
@@ -197,7 +216,7 @@ export class Engine {
       const entry = JSON.stringify({ agentId, fired, input, output, timestamp: new Date().toISOString() });
       fs.appendFileSync(path.join("./logs", `trace-${runId}.jsonl`), entry + "\n");
     } catch {
-      // Non-fatal
+      // Non-fatal — trace log failure must not crash the engine
     }
   }
 }

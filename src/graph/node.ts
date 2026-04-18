@@ -34,9 +34,13 @@ function parseDecision(text: string): LLMDecision {
     try {
       const raw = JSON.parse(objects[i]) as Record<string, unknown>;
       if (raw.action === "fire") {
+        const VALID_SEVERITY = new Set(["critical", "warning", "info"]);
+        const severity = VALID_SEVERITY.has(String(raw.severity))
+          ? (raw.severity as "critical" | "warning" | "info")
+          : "info";
         return {
           action: "fire",
-          severity: (raw.severity as "critical" | "warning" | "info") ?? "info",
+          severity,
           summary: String(raw.summary ?? ""),
           payload: raw.payload ?? {},
         };

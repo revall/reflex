@@ -40,5 +40,24 @@ export function loadConfig(path: string): TreeConfig {
     }
   }
 
+  // Detect cycles via DFS — a cycle would cause signals to loop forever
+  const childMap = new Map(config.agents.map((a) => [a.id, a.children]));
+  function hasCycle(id: string, visited: Set<string>, stack: Set<string>): boolean {
+    visited.add(id);
+    stack.add(id);
+    for (const child of childMap.get(id) ?? []) {
+      if (!visited.has(child) && hasCycle(child, visited, stack)) return true;
+      if (stack.has(child)) return true;
+    }
+    stack.delete(id);
+    return false;
+  }
+  const visited = new Set<string>();
+  for (const id of ids) {
+    if (!visited.has(id) && hasCycle(id, visited, new Set())) {
+      throw new Error(`Config contains a cycle involving agent "${id}"`);
+    }
+  }
+
   return config as TreeConfig;
 }

@@ -12,7 +12,9 @@ export async function createModel(modelId: string): Promise<BaseChatModel> {
     }
   }
   const m = new ChatAnthropic({ model: modelId });
-  // LangChain defaults topP/topK to -1 as a sentinel, but Anthropic API rejects -1
+  // LangChain sets topP/topK to -1 as a "disabled" sentinel for older models,
+  // but the Anthropic API rejects -1. Post-construction override until
+  // https://github.com/langchain-ai/langchainjs/issues fixed upstream.
   (m as unknown as Record<string, unknown>).topP = undefined;
   (m as unknown as Record<string, unknown>).topK = undefined;
   return m;

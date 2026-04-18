@@ -85,6 +85,17 @@ describe("processSignal", () => {
     expect(decision.action).toBe("fire");
   });
 
+  it("coerces unknown severity to info", async () => {
+    const model = new FakeListChatModel({
+      responses: ['{"action":"fire","severity":"high","summary":"bad severity","payload":{}}'],
+    });
+    const decision = await processSignal(rawEvent, agentConfig, { model, tools: [] });
+    expect(decision.action).toBe("fire");
+    if (decision.action === "fire") {
+      expect(decision.severity).toBe("info");
+    }
+  });
+
   it("prefers last action JSON when multiple objects appear in output", async () => {
     const model = new FakeListChatModel({
       responses: [
