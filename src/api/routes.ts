@@ -202,14 +202,16 @@ export function createRoutes(engine: Engine, nodeStore: NodeStore, runStore: Run
 
       const ping = setInterval(() => stream.writeSSE({ event: "ping", data: "{}" }), 15_000);
 
-      stream.onAbort(() => {
-        emitter.off("node_update",  onNode);
-        emitter.off("signal_fired", onFired);
-        emitter.off("run_update",   onRun);
-        clearInterval(ping);
+      // Keep the stream open until the client disconnects.
+      await new Promise<void>((resolve) => {
+        stream.onAbort(() => {
+          emitter.off("node_update",  onNode);
+          emitter.off("signal_fired", onFired);
+          emitter.off("run_update",   onRun);
+          clearInterval(ping);
+          resolve();
+        });
       });
-
-      await stream.sleep(Number.MAX_SAFE_INTEGER);
     });
   });
 
