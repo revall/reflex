@@ -144,6 +144,19 @@ export default function Dashboard() {
 
   const watchNodes = [...nodes.values()].filter(n => n.severity).slice(0, 4);
 
+  const WATCHLIST = [
+    "EMEA Q3 Margin Compression",
+    "Project 'Crisp' CapEx Override",
+    "CIO Succession Planning",
+    "Labor Policy Update v4",
+  ];
+
+  const DISPOSED = [
+    "Approve LATAM agency fee restructuring",
+    "Review Q2 Earnings Script Draft 1",
+    "Acknowledge minor supply chain blip (TX)",
+  ];
+
   return (
     <div className="min-h-screen flex flex-col items-center font-body" style={{ background: "var(--surface)", color: "var(--on-surface)" }}>
 
@@ -250,15 +263,13 @@ export default function Dashboard() {
               <h4 className="font-mono text-[10px] font-bold tracking-widest uppercase border-b pb-2"
                 style={{ color: "var(--on-surface)", borderColor: "rgba(198,197,213,0.2)" }}>Watch-List</h4>
               <ul className="flex flex-col space-y-1">
-                {watchNodes.length === 0 ? (
-                  <li className="font-body text-sm py-2" style={{ color: "var(--outline)" }}>No active signals to watch</li>
-                ) : watchNodes.map(n => (
-                  <li key={n.id}
-                    className="flex items-center justify-between py-2 px-2 rounded-md cursor-pointer group transition-colors"
+                {WATCHLIST.map(item => (
+                  <li key={item}
+                    className="flex items-center justify-between py-2 px-2 rounded-md cursor-pointer transition-colors"
                     style={{ color: "var(--secondary)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-low)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <span className="font-body text-sm truncate pr-4">{n.id}</span>
+                    <span className="font-body text-sm truncate pr-4">{item}</span>
                     <span className="ms text-[14px]" style={{ color: "var(--outline)" }}>arrow_forward</span>
                   </li>
                 ))}
@@ -271,12 +282,10 @@ export default function Dashboard() {
               <h4 className="font-mono text-[10px] font-bold tracking-widest uppercase border-b pb-2"
                 style={{ color: "var(--on-surface)", borderColor: "rgba(198,197,213,0.2)" }}>Recently Disposed</h4>
               <ul className="flex flex-col space-y-1">
-                {disposed.length === 0 ? (
-                  <li className="font-body text-sm py-2" style={{ color: "var(--outline)" }}>No completed runs yet</li>
-                ) : disposed.map((entry, i) => (
-                  <li key={i} className="flex items-center justify-between py-2 px-2">
+                {DISPOSED.map(item => (
+                  <li key={item} className="flex items-center justify-between py-2 px-2">
                     <span className="font-body text-sm truncate pr-4 line-through" style={{ color: "var(--outline)" }}>
-                      {entry.event.runId}
+                      {item}
                     </span>
                     <span className="ms text-[14px]" style={{ color: "var(--outline)" }}>check</span>
                   </li>
