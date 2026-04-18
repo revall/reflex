@@ -6,6 +6,7 @@ import type { AgentConfig, RawEvent, Signal, TraceEntry, TreeConfig } from "../t
 import { processSignal } from "./node.js";
 import { buildTools } from "../tools/index.js";
 import type { NodeStore, RunStore } from "../api/store.js";
+import { EngineEvents } from "../api/events.js";
 
 interface QueueItem {
   signal: RawEvent | Signal;
@@ -34,7 +35,8 @@ export class Engine {
     private nodeStore: NodeStore,
     private runStore: RunStore,
     private workdir: string,
-    private debug = false
+    private debug = false,
+    private events = new EngineEvents()
   ) {
     this.agentMap = new Map(config.agents.map((a) => [a.id, a]));
     this.leafIds = config.agents.filter((a) => a.children.length === 0).map((a) => a.id);
@@ -45,6 +47,10 @@ export class Engine {
       this.tail.set(agent.id, Promise.resolve());
       this.nodeContexts.set(agent.id, new Map());
     }
+  }
+
+  get emitter(): EngineEvents {
+    return this.events;
   }
 
   start(): void {
@@ -137,6 +143,7 @@ export class Engine {
     this.runPending.delete(runId);
     if (this.runStore.get(runId)?.status === "running") {
       this.runStore.setSilent(runId);
+      this.events.emitRunUpdate({ runId, status: "silent" });
     }
   }
 
@@ -144,6 +151,7 @@ export class Engine {
     const { signal, runId } = item;
     const agentCfg = this.agentMap.get(nodeId)!;
     this.nodeStore.setProcessing(nodeId);
+    this.events.emitNodeUpdate({ nodeId, state: "processing", severity: null, processedCount: this.nodeStore.get(nodeId).processedCount });
 
     const isSignal = "trace" in signal;
     const source = isSignal ? (signal as Signal).fromAgent : (signal as RawEvent).source;
@@ -176,6 +184,9 @@ export class Engine {
         process.stdout.write(`✓ [${nodeId}] fire        severity=${outSignal.severity}  "${decision.summary}"\n`);
         this.nodeStore.setFired(nodeId, outSignal);
         this.writeTraceLog(runId, nodeId, signal, outSignal, true);
+        const firedStatus = this.nodeStore.get(nodeId);
+        this.events.emitNodeUpdate({ nodeId, state: firedStatus.state, severity: firedStatus.severity, processedCount: firedStatus.processedCount });
+        this.events.emitSignalFired({ fromAgent: outSignal.fromAgent, toAgent: outSignal.toAgent, severity: outSignal.severity, summary: decision.summary, trace: outSignal.trace });
 
         if (parentId) {
           // Enqueue to parent first (increments pending), then decrement for
@@ -187,17 +198,22 @@ export class Engine {
           // Root fired — mark complete and clean up pending tracking.
           this.runStore.setComplete(runId, outSignal.payload);
           this.runPending.delete(runId);
+          this.events.emitRunUpdate({ runId, status: "complete" });
         }
       } else {
         process.stdout.write(`✗ [${nodeId}] silent\n`);
         this.nodeStore.setSilent(nodeId);
         this.writeTraceLog(runId, nodeId, signal, null, false);
+        const silentStatus = this.nodeStore.get(nodeId);
+        this.events.emitNodeUpdate({ nodeId, state: "silent", severity: silentStatus.severity, processedCount: silentStatus.processedCount });
         this.decrement(runId);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       process.stdout.write(`! [${nodeId}] error        ${message}\n`);
       this.nodeStore.setError(nodeId, message);
+      const errStatus = this.nodeStore.get(nodeId);
+      this.events.emitNodeUpdate({ nodeId, state: "error", severity: errStatus.severity, processedCount: errStatus.processedCount });
       this.decrement(runId);
     }
   }

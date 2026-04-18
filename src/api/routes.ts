@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { streamSSE } from "hono/streaming";
 import { v4 as uuidv4 } from "uuid";
 import type { Engine } from "../graph/builder.js";
 import type { NodeStore, RunStore } from "./store.js";
@@ -183,6 +184,34 @@ export function createRoutes(engine: Engine, nodeStore: NodeStore, runStore: Run
       return c.json(run, 200);
     }
   );
+
+  // SSE — plain Hono route (not OpenAPI, streaming response)
+  app.get("/events", (c) => {
+    const emitter = engine.emitter;
+    return streamSSE(c, async (stream) => {
+      const send = (event: string, data: unknown) =>
+        stream.writeSSE({ event, data: JSON.stringify(data) });
+
+      const onNode  = (d: unknown) => send("node_update",  d);
+      const onFired = (d: unknown) => send("signal_fired", d);
+      const onRun   = (d: unknown) => send("run_update",   d);
+
+      emitter.on("node_update",  onNode);
+      emitter.on("signal_fired", onFired);
+      emitter.on("run_update",   onRun);
+
+      const ping = setInterval(() => stream.writeSSE({ event: "ping", data: "{}" }), 15_000);
+
+      stream.onAbort(() => {
+        emitter.off("node_update",  onNode);
+        emitter.off("signal_fired", onFired);
+        emitter.off("run_update",   onRun);
+        clearInterval(ping);
+      });
+
+      await stream.sleep(Number.MAX_SAFE_INTEGER);
+    });
+  });
 
   return app;
 }
