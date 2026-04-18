@@ -121,6 +121,41 @@ describe("E2E — full tree via HTTP", () => {
     expect(byId["root"].severity).toBe("warning");
   });
 
+  it("signal trace propagates from leaf through root", async () => {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { incident: "cpu spike", host: "srv-02" }, source: "monitor" }),
+    });
+    const { runId } = await res.json() as { runId: string };
+    await pollRun(url, runId);
+
+    // Inspect the last signal received by root via GET /nodes/root
+    const nodeRes = await fetch(`${url}/nodes/root`);
+    expect(nodeRes.status).toBe(200);
+    const root = await nodeRes.json() as NodeStatus;
+
+    const trace = root.lastSignal?.trace as Array<{ agentId: string; summary: string; firedAt: string }>;
+    expect(trace).toBeDefined();
+    expect(trace.length).toBeGreaterThanOrEqual(2); // leaf + root
+
+    // Leaf entry must appear before root entry
+    const leafIdx = trace.findIndex((t) => t.agentId === "leaf_a" || t.agentId === "leaf_b");
+    const rootIdx = trace.findIndex((t) => t.agentId === "root");
+    expect(leafIdx).toBeGreaterThanOrEqual(0);
+    expect(rootIdx).toBeGreaterThan(leafIdx);
+
+    // Every entry must have the required fields
+    for (const entry of trace) {
+      expect(entry.agentId).toBeTruthy();
+      expect(entry.summary).toBeTruthy();
+      expect(new Date(entry.firedAt).getTime()).toBeGreaterThan(0);
+    }
+
+    // Root's summary must match what the model returned
+    expect(trace[rootIdx].summary).toBe("anomaly detected");
+  });
+
   it("GET /runs/:runId returns 404 for unknown id", async () => {
     const res = await fetch(`${url}/runs/run_does_not_exist`);
     expect(res.status).toBe(404);
