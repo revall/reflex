@@ -16,13 +16,23 @@ export function useNodes() {
 
   const onNodeUpdate = useCallback((data: unknown) => {
     const e = data as NodeUpdateEvent;
-    setNodes((prev) => {
-      const next = new Map(prev);
-      const existing = next.get(e.nodeId);
-      if (existing) {
-        next.set(e.nodeId, { ...existing, state: e.state, severity: e.severity, processedCount: e.processedCount });
-      }
-      return next;
+    // Re-fetch the full node so lastSignal (and its trace) is always current.
+    client.getNode(e.nodeId).then((full) => {
+      setNodes((prev) => {
+        const next = new Map(prev);
+        next.set(full.id, full);
+        return next;
+      });
+    }).catch(() => {
+      // Fallback: patch the fields we have from the SSE event
+      setNodes((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(e.nodeId);
+        if (existing) {
+          next.set(e.nodeId, { ...existing, state: e.state, severity: e.severity, processedCount: e.processedCount });
+        }
+        return next;
+      });
     });
   }, []);
 
