@@ -138,12 +138,6 @@ export default function Dashboard() {
 
   const [hero, ...rest] = signals;
 
-  const disposed = feed
-    .filter((e): e is FeedEntry & { kind: "run" } => e.kind === "run" && e.event.status !== "running")
-    .slice(0, 5);
-
-  const watchNodes = [...nodes.values()].filter(n => n.severity).slice(0, 4);
-
   const WATCHLIST = [
     "EMEA Q3 Margin Compression",
     "Project 'Crisp' CapEx Override",
