@@ -233,6 +233,13 @@ export default function Dashboard() {
         <div className="flex items-center space-x-4">
           <span className="material-symbols-outlined ms text-[20px]" style={{ color: "var(--outline)" }}>settings</span>
           <div className="h-5 w-px" style={{ background: "rgba(198,197,213,0.4)" }} />
+          <div className="flex items-center space-x-3 cursor-pointer">
+            <span className="font-body text-sm" style={{ color: "var(--secondary)" }}>Joshua Kobza</span>
+            <img src="/kobza-photo.png" alt="Joshua Kobza"
+              className="w-9 h-9 rounded-full object-cover"
+              style={{ border: "1px solid rgba(198,197,213,0.4)" }} />
+          </div>
+          <div className="h-5 w-px" style={{ background: "rgba(198,197,213,0.4)" }} />
           <Link to="/" className="font-body text-sm transition-colors" style={{ color: "var(--secondary)" }}>
             ← Tree
           </Link>
